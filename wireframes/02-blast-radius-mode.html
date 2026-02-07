@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeChronicle - Blast Radius Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .node-selected { background: #8b5cf6; }
+        .node-affected { background: #f59e0b; }
+        .node-dimmed { background: #4b5563; opacity: 0.3; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-64 bg-gray-800 border-r border-gray-700 p-4">
+            <div class="text-xs text-gray-400 mb-2">EXPLORER</div>
+            <div class="text-sm">
+                <div class="mb-1">📁 src</div>
+                <div class="ml-4 mb-1">📄 index.ts</div>
+                <div class="ml-4 mb-1">📄 database.ts</div>
+                <div class="ml-4 mb-1 text-purple-400 font-semibold">📄 auth.ts ← Selected</div>
+                <div class="mb-1">📁 components</div>
+                <div class="mb-1">📁 utils</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Toolbar with Blast Radius Banner -->
+            <div class="bg-purple-700 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <span class="text-lg font-semibold">💥 Blast Radius Mode Active</span>
+                    <span class="text-sm">Showing impact of: <strong>src/auth.ts</strong></span>
+                </div>
+                <button class="px-4 py-2 bg-white text-purple-700 hover:bg-gray-100 rounded font-semibold">
+                    Exit Blast Radius Mode
+                </button>
+            </div>
+
+            <div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-lg font-semibold">CodeChronicle</h1>
+                    <div class="flex items-center space-x-2">
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                         Refresh Graph
+                        </button>
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                            💾 Save Snapshot
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="text-sm text-gray-400">
+                        <span class="text-green-400">●</span> Cloud Connected
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graph Area -->
+            <div class="flex-1 flex z-1000">
+                <div class="flex-1 bg-gray-900 relative">
+                    <!-- Blast Radius Info Box -->
+                    <div class="absolute top-4 left-4 bg-purple-900 border-2 border-purple-500 rounded-lg p-4 shadow-lg max-w-sm">
+                        <div class="text-sm font-semibold mb-2">Blast Radius Analysis</div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-300">Selected File:</span>
+                                <span class="font-semibold">auth.ts</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-300">Direct Dependents:</span>
+                                <span class="font-semibold text-orange-400">8</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-300">Indirect Dependents:</span>
+                                <span class="font-semibold text-orange-400">23</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-300">Total Impact:</span>
+                                <span class="font-semibold text-orange-400">31 files</span>
+                            </div>
+                            <div class="border-t border-purple-700 pt-2 mt-2">
+                                <div class="text-xs text-gray-400">
+                                    ⚠️ Modifying this file will affect 31 other files
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="absolute top-4 right-4 bg-gray-800 rounded-lg p-3 shadow-lg z-1000">
+                        <div class="text-xs text-gray-400 mb-2">BLAST RADIUS LEGEND</div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-selected"></div>
+                                <span>Selected File</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-affected"></div>
+                                <span>Affected Files</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-dimmed"></div>
+                                <span>Unaffected Files</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mock Graph with Blast Radius -->
+                    <div class="mt-[150px] inset-0 flex items-center justify-center">
+                        <svg width="800" height="600" class="border border-gray-700 rounded">
+                            <!-- Dimmed edges -->
+                            <line x1="100" y1="100" x2="150" y2="150" stroke="#4b5563" stroke-width="1" opacity="0.3"/>
+                            
+                            <!-- Active edges (highlighted) -->
+                            <line x1="300" y1="350" x2="200" y2="150" stroke="#f59e0b" stroke-width="3"/>
+                            <line x1="300" y1="350" x2="400" y2="200" stroke="#f59e0b" stroke-width="3"/>
+                            <line x1="300" y1="350" x2="500" y2="400" stroke="#f59e0b" stroke-width="3"/>
+                            <line x1="400" y1="200" x2="600" y2="250" stroke="#f59e0b" stroke-width="3"/>
+                            <line x1="200" y1="150" x2="250" y2="100" stroke="#f59e0b" stroke-width="3"/>
+                            <line x1="500" y1="400" x2="650" y2="450" stroke="#f59e0b" stroke-width="3"/>
+                            
+                            <!-- Dimmed nodes -->
+                            <circle cx="100" cy="100" r="20" class="node-dimmed" stroke="#4b5563" stroke-width="1"/>
+                            <text x="100" y="105" text-anchor="middle" fill="#9ca3af" font-size="8">other.ts</text>
+                            
+                            <!-- Affected nodes -->
+                            <circle cx="200" cy="150" r="30" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="200" y="155" text-anchor="middle" fill="white" font-size="10">index.ts</text>
+                            
+                            <circle cx="400" cy="200" r="35" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="400" y="205" text-anchor="middle" fill="white" font-size="10">database.ts</text>
+                            
+                            <circle cx="600" cy="250" r="25" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="600" y="255" text-anchor="middle" fill="white" font-size="10">utils.ts</text>
+                            
+                            <circle cx="500" cy="400" r="30" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="500" y="405" text-anchor="middle" fill="white" font-size="10">api.ts</text>
+                            
+                            <circle cx="250" cy="100" r="25" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="250" y="105" text-anchor="middle" fill="white" font-size="10">routes.ts</text>
+                            
+                            <circle cx="650" cy="450" r="25" class="node-affected" stroke="#fff" stroke-width="2"/>
+                            <text x="650" y="455" text-anchor="middle" fill="white" font-size="10">service.ts</text>
+                            
+                            <!-- Selected node (pulsing effect) -->
+                            <circle cx="300" cy="350" r="55" class="node-selected" stroke="#fff" stroke-width="4">
+                                <animate attributeName="r" values="55;60;55" dur="2s" repeatCount="indefinite"/>
+                            </circle>
+                            <text x="300" y="355" text-anchor="middle" fill="white" font-size="12" font-weight="bold">auth.ts</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar - Affected Files List -->
+                <div class="w-96 bg-gray-800 border-l border-gray-700 overflow-y-auto">
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-2">BLAST RADIUS IMPACT</div>
+                        <div class="text-lg font-semibold mb-2">31 Files Affected</div>
+                        <p class="text-sm text-gray-400">
+                            These files depend on <strong>auth.ts</strong> and may be impacted by changes
+                        </p>
+                    </div>
+
+                    <!-- Direct Dependents -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-3">DIRECT DEPENDENTS (8)</div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/index.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">High Risk</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/api.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Medium Risk</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/routes.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Medium Risk</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/middleware/auth.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">High Risk</span>
+                            </div>
+                            <div class="text-xs text-gray-400 text-center pt-2">+ 4 more files</div>
+                        </div>
+                    </div>
+
+                    <!-- Indirect Dependents -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-3">INDIRECT DEPENDENTS (23)</div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/database.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">via index.ts</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/services/user.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">via api.ts</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-gray-700 rounded hover:bg-gray-600 cursor-pointer">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-orange-400">📄</span>
+                                    <span class="text-sm">src/utils/validation.ts</span>
+                                </div>
+                                <span class="text-xs text-gray-400">via routes.ts</span>
+                            </div>
+                            <div class="text-xs text-gray-400 text-center pt-2">+ 20 more files</div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="p-4">
+                        <div class="text-xs text-gray-400 mb-3">ACTIONS</div>
+                        <div class="space-y-2">
+                            <button class="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                                📋 Export Impact Report
+                            </button>
+                            <button class="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                🔍 Analyze Another File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Status Bar -->
+            <div class="bg-gray-800 border-t border-gray-700 px-6 py-2 flex items-center justify-between text-sm">
+                <div class="flex items-center space-x-4">
+                    <span class="text-purple-400">💥 Blast Radius Mode</span>
+                </div>
+                <div class="text-gray-400">
+                    Computing transitive dependencies...
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

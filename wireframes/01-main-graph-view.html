@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeChronicle - Main Graph View</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .node-low { background: #10b981; }
+        .node-medium { background: #f59e0b; }
+        .node-high { background: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <!-- Main Container -->
+    <div class="flex h-screen">
+        <!-- Left Sidebar - File Tree (VS Code Native) -->
+        <div class="w-64 bg-gray-800 border-r border-gray-700 p-4">
+            <div class="text-xs text-gray-400 mb-2">EXPLORER</div>
+            <div class="text-sm">
+                <div class="mb-1">📁 src</div>
+                <div class="ml-4 mb-1">📄 index.ts</div>
+                <div class="ml-4 mb-1">📄 database.ts</div>
+                <div class="ml-4 mb-1">📄 auth.ts</div>
+                <div class="mb-1">📁 components</div>
+                <div class="mb-1">📁 utils</div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Toolbar -->
+            <div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-lg font-semibold">CodeChronicle</h1>
+                    <div class="flex items-center space-x-2">
+                        <button class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                            Refresh Graph
+                        </button>
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                            💾 Save Snapshot
+                        </button>
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                            ⚙️ Settings
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="text-sm text-gray-400">
+                        <span class="text-green-400">●</span> Cloud Connected
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        Files: <span class="text-white">1,247</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graph Visualization Area -->
+            <div class="flex-1 flex">
+                <!-- Graph Canvas -->
+                <div class="flex-1 bg-gray-900 relative z-1000">
+                    <!-- Graph Controls Overlay -->
+                    <div class="absolute top-4 left-4 bg-gray-800 rounded-lg p-3 shadow-lg">
+                        <div class="text-xs text-gray-400 mb-2">GRAPH CONTROLS</div>
+                        <div class="space-y-2">
+                            <button class="w-full px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                🔍 Zoom In
+                            </button>
+                            <button class="w-full px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                🔍 Zoom Out
+                            </button>
+                            <button class="w-full px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                🎯 Fit View
+                            </button>
+                            <button class="w-full px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                                💥 Blast Radius
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="absolute top-4 right-4 bg-gray-800 rounded-lg p-3 shadow-lg z-1000">
+                        <div class="text-xs text-gray-400 mb-2">LEGEND</div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-low"></div>
+                                <span>Low Risk</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-medium"></div>
+                                <span>Medium Risk</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded-full node-high"></div>
+                                <span>High Risk</span>
+                            </div>
+                            <div class="border-t border-gray-700 pt-2 mt-2">
+                                <div class="text-xs text-gray-400">Node Size = Complexity</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mock Graph Visualization -->
+                    <div class="mt-[100px] inset-0 flex items-center justify-center">
+                        <svg width="800" height="600" class="border border-gray-700 rounded">
+                            <!-- Edges -->
+                            <line x1="200" y1="150" x2="400" y2="200" stroke="#4b5563" stroke-width="2"/>
+                            <line x1="200" y1="150" x2="300" y2="350" stroke="#4b5563" stroke-width="2"/>
+                            <line x1="400" y1="200" x2="600" y2="250" stroke="#4b5563" stroke-width="2"/>
+                            <line x1="300" y1="350" x2="500" y2="400" stroke="#4b5563" stroke-width="2"/>
+                            
+                            <!-- Nodes -->
+                            <circle cx="200" cy="150" r="30" class="node-low" stroke="#fff" stroke-width="2"/>
+                            <text x="200" y="155" text-anchor="middle" fill="white" font-size="10">index.ts</text>
+                            
+                            <circle cx="400" cy="200" r="40" class="node-medium" stroke="#fff" stroke-width="2"/>
+                            <text x="400" y="205" text-anchor="middle" fill="white" font-size="10">database.ts</text>
+                            
+                            <circle cx="600" cy="250" r="25" class="node-low" stroke="#fff" stroke-width="2"/>
+                            <text x="600" y="255" text-anchor="middle" fill="white" font-size="10">utils.ts</text>
+                            
+                            <circle cx="300" cy="350" r="50" class="node-high" stroke="#fff" stroke-width="3"/>
+                            <text x="300" y="355" text-anchor="middle" fill="white" font-size="10">auth.ts</text>
+                            
+                            <circle cx="500" cy="400" r="35" class="node-medium" stroke="#fff" stroke-width="2"/>
+                            <text x="500" y="405" text-anchor="middle" fill="white" font-size="10">api.ts</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar - Details Panel -->
+                <div class="w-96 bg-gray-800 border-l border-gray-700 overflow-y-auto">
+                    <!-- File Details -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-2">SELECTED FILE</div>
+                        <div class="text-lg font-semibold mb-2">src/auth.ts</div>
+                        <div class="flex items-center space-x-2 mb-3">
+                            <span class="px-2 py-1 bg-red-600 rounded text-xs">HIGH RISK</span>
+                            <span class="text-sm text-gray-400">Score: 85/100</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Summary -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-xs text-gray-400">AI SUMMARY</div>
+                            <div class="text-xs text-green-400">✓ Cached</div>
+                        </div>
+                        <p class="text-sm text-gray-300 leading-relaxed">
+                            This file handles user authentication and authorization logic. It manages JWT token generation, 
+                            password hashing, and session management. Critical for security and user access control across 
+                            the application.
+                        </p>
+                    </div>
+
+                    <!-- Structural Metrics -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-3">STRUCTURAL METRICS</div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Lines of Code:</span>
+                                <span class="font-semibold">342</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Dependencies:</span>
+                                <span class="font-semibold">8</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Dependents:</span>
+                                <span class="font-semibold">15</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Centrality Score:</span>
+                                <span class="font-semibold">0.82</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Factors -->
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-3">RISK FACTORS</div>
+                        <div class="space-y-2">
+                            <div class="flex items-start space-x-2">
+                                <span class="text-red-400">⚠️</span>
+                                <span class="text-sm">Authentication logic</span>
+                            </div>
+                            <div class="flex items-start space-x-2">
+                                <span class="text-red-400">⚠️</span>
+                                <span class="text-sm">Database writes</span>
+                            </div>
+                            <div class="flex items-start space-x-2">
+                                <span class="text-red-400">⚠️</span>
+                                <span class="text-sm">Security-sensitive operations</span>
+                            </div>
+                            <div class="flex items-start space-x-2">
+                                <span class="text-yellow-400">⚠️</span>
+                                <span class="text-sm">High dependent count</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="p-4">
+                        <div class="text-xs text-gray-400 mb-3">ACTIONS</div>
+                        <div class="space-y-2">
+                            <button class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                                📂 Open File
+                            </button>
+                            <button class="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                                💥 Show Blast Radius
+                            </button>
+                            <button class="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                🔄 Refresh Analysis
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Status Bar -->
+            <div class="bg-gray-800 border-t border-gray-700 px-6 py-2 flex items-center justify-between text-sm">
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400">Status:</span>
+                    <span class="text-green-400">Ready</span>
+                </div>
+                <div class="flex items-center space-x-4 text-gray-400">
+                    <span>Last Updated: 2 minutes ago</span>
+                    <span>|</span>
+                    <span>Storage: S3</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

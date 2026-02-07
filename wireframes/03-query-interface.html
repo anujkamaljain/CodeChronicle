@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeChronicle - Query Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-64 bg-gray-800 border-r border-gray-700 p-4">
+            <div class="text-xs text-gray-400 mb-2">EXPLORER</div>
+            <div class="text-sm">
+                <div class="mb-1">📁 src</div>
+                <div class="ml-4 mb-1">📄 index.ts</div>
+                <div class="ml-4 mb-1">📄 database.ts</div>
+                <div class="ml-4 mb-1">📄 auth.ts</div>
+                <div class="mb-1">📁 components</div>
+                <div class="mb-1">📁 utils</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Toolbar -->
+            <div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-lg font-semibold">CodeChronicle - AI Query</h1>
+                    <div class="flex items-center space-x-2">
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                            <- Back to Graph
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="text-sm text-gray-400">
+                        <span class="text-green-400">●</span> Cloud Connected
+                    </div>
+                </div>
+            </div>
+
+            <!-- Query Interface -->
+            <div class="flex-1 flex">
+                <!-- Main Query Area -->
+                <div class="flex-1 bg-gray-900 overflow-y-auto">
+                    <!-- Query Input Section -->
+                    <div class="max-w-4xl mx-auto p-8">
+                        <div class="mb-8">
+                            <h2 class="text-2xl font-bold mb-2">Ask About Your Codebase</h2>
+                            <p class="text-gray-400">Use natural language to explore and understand your code</p>
+                        </div>
+
+                        <!-- Query Input Box -->
+                        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+                            <textarea 
+                                class="w-full bg-gray-900 text-white p-4 rounded border border-gray-700 focus:border-blue-500 focus:outline-none resize-none"
+                                rows="3"
+                                placeholder="Ask a question about your codebase... (e.g., 'Where is user authentication handled?')"
+                            >Where is user authentication handled?</textarea>
+                            <div class="flex items-center justify-between mt-3">
+                                <div class="text-xs text-gray-400">
+                                    💡 Tip: Be specific for better results
+                                </div>
+                                <button class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded font-semibold">
+                                    🔍 Ask Question
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Example Queries -->
+                        <div class="mb-8">
+                            <div class="text-sm text-gray-400 mb-3">EXAMPLE QUERIES</div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded text-left text-sm">
+                                    Where is user authentication handled?
+                                </button>
+                                <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded text-left text-sm">
+                                    Which files access the database?
+                                </button>
+                                <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded text-left text-sm">
+                                    What are the most critical files?
+                                </button>
+                                <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded text-left text-sm">
+                                    Show me all API endpoints
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Query Result -->
+                        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-lg font-semibold">Answer</span>
+                                    <span class="px-2 py-1 bg-green-600 rounded text-xs">Confidence: 92%</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Generated by AWS Bedrock</span>
+                            </div>
+                            
+                            <div class="prose prose-invert max-w-none">
+                                <p class="text-gray-300 leading-relaxed mb-4">
+                                    User authentication is primarily handled in <strong>src/auth.ts</strong>, which contains 
+                                    the core authentication logic including JWT token generation, password hashing, and session 
+                                    management. This file is imported by several other components:
+                                </p>
+                                
+                                <ul class="space-y-2 text-gray-300">
+                                    <li><strong>src/middleware/auth.ts</strong> - Implements authentication middleware for Express routes</li>
+                                    <li><strong>src/routes.ts</strong> - Defines protected routes that require authentication</li>
+                                    <li><strong>src/api.ts</strong> - Handles API authentication endpoints (login, logout, refresh)</li>
+                                </ul>
+
+                                <p class="text-gray-300 leading-relaxed mt-4">
+                                    The authentication flow uses JWT tokens stored in HTTP-only cookies for security. 
+                                    Password hashing is performed using bcrypt with a salt factor of 10.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Referenced Files -->
+                        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                            <div class="text-sm font-semibold mb-4">REFERENCED FILES (4)</div>
+                            <div class="space-y-3">
+                                <div class="flex items-start justify-between p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <span class="text-red-400">⚠️</span>
+                                            <span class="font-semibold">src/auth.ts</span>
+                                            <span class="px-2 py-0.5 bg-red-600 rounded text-xs">HIGH RISK</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">Core authentication logic, JWT generation, password hashing</p>
+                                        <div class="text-xs text-gray-500 mt-1">Lines: 45-89, 120-156</div>
+                                    </div>
+                                    <button class="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+                                        Open
+                                    </button>
+                                </div>
+
+                                <div class="flex items-start justify-between p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <span class="text-yellow-400">⚠️</span>
+                                            <span class="font-semibold">src/middleware/auth.ts</span>
+                                            <span class="px-2 py-0.5 bg-yellow-600 rounded text-xs">MEDIUM RISK</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">Express middleware for route protection</p>
+                                        <div class="text-xs text-gray-500 mt-1">Lines: 12-34</div>
+                                    </div>
+                                    <button class="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+                                        Open
+                                    </button>
+                                </div>
+
+                                <div class="flex items-start justify-between p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <span class="text-yellow-400">⚠️</span>
+                                            <span class="font-semibold">src/routes.ts</span>
+                                            <span class="px-2 py-0.5 bg-yellow-600 rounded text-xs">MEDIUM RISK</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">Route definitions with authentication guards</p>
+                                        <div class="text-xs text-gray-500 mt-1">Lines: 78-92</div>
+                                    </div>
+                                    <button class="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+                                        Open
+                                    </button>
+                                </div>
+
+                                <div class="flex items-start justify-between p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <span class="text-yellow-400">⚠️</span>
+                                            <span class="font-semibold">src/api.ts</span>
+                                            <span class="px-2 py-0.5 bg-yellow-600 rounded text-xs">MEDIUM RISK</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">API endpoints for login, logout, token refresh</p>
+                                        <div class="text-xs text-gray-500 mt-1">Lines: 145-203</div>
+                                    </div>
+                                    <button class="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+                                        Open
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Suggested Follow-up Questions -->
+                        <div class="bg-gray-800 rounded-lg p-6">
+                            <div class="text-sm font-semibold mb-4">SUGGESTED FOLLOW-UP QUESTIONS</div>
+                            <div class="space-y-2">
+                                <button class="w-full p-3 bg-gray-900 hover:bg-gray-700 rounded text-left text-sm flex items-center justify-between">
+                                    <span>How is password hashing implemented?</span>
+                                    <span class="text-gray-500">→</span>
+                                </button>
+                                <button class="w-full p-3 bg-gray-900 hover:bg-gray-700 rounded text-left text-sm flex items-center justify-between">
+                                    <span>What happens when a JWT token expires?</span>
+                                    <span class="text-gray-500">→</span>
+                                </button>
+                                <button class="w-full p-3 bg-gray-900 hover:bg-gray-700 rounded text-left text-sm flex items-center justify-between">
+                                    <span>Which routes require authentication?</span>
+                                    <span class="text-gray-500">→</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar - Query History -->
+                <div class="w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto">
+                    <div class="p-4 border-b border-gray-700">
+                        <div class="text-xs text-gray-400 mb-2">QUERY HISTORY</div>
+                        <p class="text-sm text-gray-400">Recent questions about your codebase</p>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="space-y-3">
+                            <div class="p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                <div class="text-sm font-semibold mb-1">Where is user authentication handled?</div>
+                                <div class="text-xs text-gray-400">Just now</div>
+                            </div>
+
+                            <div class="p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                <div class="text-sm mb-1">Which files access the database?</div>
+                                <div class="text-xs text-gray-400">5 minutes ago</div>
+                            </div>
+
+                            <div class="p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                <div class="text-sm mb-1">What are the most critical files?</div>
+                                <div class="text-xs text-gray-400">15 minutes ago</div>
+                            </div>
+
+                            <div class="p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                <div class="text-sm mb-1">Show me all API endpoints</div>
+                                <div class="text-xs text-gray-400">1 hour ago</div>
+                            </div>
+
+                            <div class="p-3 bg-gray-900 rounded hover:bg-gray-700 cursor-pointer">
+                                <div class="text-sm mb-1">How is error handling implemented?</div>
+                                <div class="text-xs text-gray-400">2 hours ago</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t border-gray-700">
+                        <button class="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                            🗑️ Clear History
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Status Bar -->
+            <div class="bg-gray-800 border-t border-gray-700 px-6 py-2 flex items-center justify-between text-sm">
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400">AI Query Mode</span>
+                </div>
+                <div class="text-gray-400">
+                    Powered by AWS Bedrock
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
