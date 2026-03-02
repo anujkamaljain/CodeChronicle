@@ -1,0 +1,122 @@
+service: codechronicle-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    BEDROCK_MODEL_ID: anthropic.claude-3-haiku-20240307-v1:0
+    SUMMARIES_TABLE: ${self:service}-summaries-${self:provider.stage}
+    RISKS_TABLE: ${self:service}-risks-${self:provider.stage}
+    STAGE: ${self:provider.stage}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+            - bedrock:InvokeModelWithResponseStream
+          Resource: '*'
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - !GetAtt SummariesTable.Arn
+            - !GetAtt RisksTable.Arn
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: '*'
+  httpApi:
+    cors: true
+
+functions:
+  aiExplain:
+    handler: lambda/aiHandler.explain
+    events:
+      - httpApi:
+          path: /ai/explain
+          method: POST
+    timeout: 60
+
+  aiRiskScore:
+    handler: lambda/riskEngine.assessRisk
+    events:
+      - httpApi:
+          path: /ai/risk-score
+          method: POST
+    timeout: 60
+
+  aiQuery:
+    handler: lambda/aiHandler.query
+    events:
+      - httpApi:
+          path: /ai/query
+          method: POST
+    timeout: 60
+
+  cacheGet:
+    handler: lambda/cacheService.get
+    events:
+      - httpApi:
+          path: /cache/{hash}
+          method: GET
+
+  cachePut:
+    handler: lambda/cacheService.put
+    events:
+      - httpApi:
+          path: /cache
+          method: POST
+
+resources:
+  Resources:
+    SummariesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.SUMMARIES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: fileHash
+            AttributeType: S
+          - AttributeName: filePath
+            AttributeType: S
+        KeySchema:
+          - AttributeName: fileHash
+            KeyType: HASH
+          - AttributeName: filePath
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    RisksTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.RISKS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: fileHash
+            AttributeType: S
+          - AttributeName: filePath
+            AttributeType: S
+        KeySchema:
+          - AttributeName: fileHash
+            KeyType: HASH
+          - AttributeName: filePath
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true

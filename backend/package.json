@@ -1,0 +1,21 @@
+{
+    "name": "codechronicle-backend",
+    "version": "0.1.0",
+    "description": "CodeChronicle AWS Lambda backend for AI processing",
+    "private": true,
+    "scripts": {
+        "deploy": "npx serverless deploy",
+        "deploy:stage": "npx serverless deploy --stage staging",
+        "remove": "npx serverless remove",
+        "logs": "npx serverless logs -f aiReasoningLambda -t",
+        "test": "jest"
+    },
+    "dependencies": {
+        "@aws-sdk/client-bedrock-runtime": "^3.515.0",
+        "@aws-sdk/client-dynamodb": "^3.515.0",
+        "@aws-sdk/lib-dynamodb": "^3.515.0"
+    },
+    "devDependencies": {
+        "serverless": "^3.38.0"
+    }
+}

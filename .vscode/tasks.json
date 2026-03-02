@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "dev",
+            "path": "extension",
+            "group": "build",
+            "label": "npm: dev - extension",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "webpack",
+                "pattern": {
+                    "regexp": "^(ERROR|WARNING)\\s+in\\s+(.*)$",
+                    "severity": 1,
+                    "message": 2
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^\\s*webpack",
+                    "endsPattern": "^\\s*webpack.*compiled"
+                }
+            }
+        },
+        {
+            "type": "npm",
+            "script": "build",
+            "path": "extension",
+            "group": "build",
+            "label": "npm: build - extension"
+        }
+    ]
+}

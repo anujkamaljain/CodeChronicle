@@ -1,0 +1,169 @@
+{
+  "name": "codechronicle",
+  "displayName": "CodeChronicle",
+  "description": "AI-Powered codebase analysis with interactive dependency graphs, blast radius prediction, and natural language exploration. Powered by AWS Bedrock.",
+  "version": "0.1.0",
+  "publisher": "codechronicle",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "dependency graph",
+    "code analysis",
+    "blast radius",
+    "AI",
+    "AWS Bedrock",
+    "codebase explorer"
+  ],
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codechronicle.scanWorkspace",
+        "title": "CodeChronicle: Scan Workspace",
+        "icon": "$(search)"
+      },
+      {
+        "command": "codechronicle.showGraph",
+        "title": "CodeChronicle: Open Graph View",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "codechronicle.askAI",
+        "title": "CodeChronicle: Ask AI About Codebase",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "codechronicle.predictBlastRadius",
+        "title": "CodeChronicle: Predict Blast Radius",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "codechronicle.refreshAnalysis",
+        "title": "CodeChronicle: Refresh Analysis",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "codechronicle.showGraph",
+          "group": "navigation",
+          "when": "explorerResourceIsFolder || resourceExtname"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodeChronicle",
+      "properties": {
+        "codechronicle.excludePatterns": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/.git/**",
+            "**/vendor/**",
+            "**/__pycache__/**",
+            "**/build/**",
+            "**/target/**",
+            "**/.next/**",
+            "**/coverage/**"
+          ],
+          "description": "Glob patterns for files/directories to exclude from analysis."
+        },
+        "codechronicle.awsApiEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "AWS API Gateway endpoint URL for cloud AI features."
+        },
+        "codechronicle.awsRegion": {
+          "type": "string",
+          "default": "us-east-1",
+          "description": "AWS region for cloud services."
+        },
+        "codechronicle.enableCloudAI": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable cloud AI features (requires AWS configuration)."
+        },
+        "codechronicle.maxFiles": {
+          "type": "number",
+          "default": 10000,
+          "description": "Maximum number of files to analyze. Larger workspaces may need Neptune integration."
+        },
+        "codechronicle.supportedExtensions": {
+          "type": "array",
+          "default": [
+            ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+            ".py", ".pyw",
+            ".java",
+            ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hxx",
+            ".cs",
+            ".go",
+            ".rb",
+            ".php",
+            ".rs",
+            ".swift",
+            ".kt", ".kts",
+            ".scala",
+            ".r", ".R",
+            ".lua",
+            ".dart",
+            ".vue", ".svelte",
+            ".css", ".scss", ".sass", ".less",
+            ".html", ".htm"
+          ],
+          "description": "File extensions to include in analysis."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "lint": "eslint src/",
+    "test": "jest --config jest.config.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.23.3",
+    "autoprefixer": "^10.4.18",
+    "babel-loader": "^9.1.3",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^6.10.0",
+    "css-minimizer-webpack-plugin": "^6.0.0",
+    "mini-css-extract-plugin": "^2.8.1",
+    "postcss": "^8.4.35",
+    "postcss-loader": "^8.1.1",
+    "style-loader": "^3.3.4",
+    "tailwindcss": "^3.4.1",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "cytoscape": "^3.28.1",
+    "cytoscape-cose-bilkent": "^4.1.0",
+    "framer-motion": "^11.0.8",
+    "glob": "^10.3.10",
+    "ignore": "^5.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.5.2"
+  }
+}
