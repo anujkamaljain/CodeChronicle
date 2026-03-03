@@ -212,7 +212,7 @@ class DependencyParser {
         // Known external package prefixes/patterns per language
         this.externalPatterns = {
             javascript: [
-                /^[^./]/, // Doesn't start with . or /
+                /^(?!@\/)[^./]/, // Doesn't start with . or / (but @/ is a local alias, not external)
             ],
             python: [
                 /^(?:os|sys|re|json|math|datetime|collections|functools|itertools|pathlib|typing|abc|io|unittest|logging|argparse|subprocess|threading|multiprocessing|socket|http|urllib|email|html|xml|csv|sqlite3|hashlib|hmac|secrets|base64|struct|pickle|shelve|copy|pprint|enum|dataclasses|contextlib|concurrent|asyncio|queue)\b/,
@@ -371,8 +371,10 @@ class DependencyParser {
                 // Handle path aliases like @/ (commonly points to src/ or root)
                 if (importPath.startsWith('@/')) {
                     const aliasPath = importPath.substring(2); // Remove @/
-                    // Try common alias targets: src/, root, app/
-                    const aliasRoots = ['src/', 'app/', ''];
+
+                    // Try to read actual path mappings from tsconfig/jsconfig
+                    const aliasRoots = this._getAliasRoots(workspacePath);
+
                     for (const root of aliasRoots) {
                         const aliased = root + aliasPath;
                         const possibleExts = ['', '.js', '.jsx', '.ts', '.tsx', '/index.js', '/index.jsx', '/index.ts', '/index.tsx'];
@@ -383,6 +385,7 @@ class DependencyParser {
                             }
                         }
                     }
+                    // Fallback: return the most common mapping
                     return ('src/' + aliasPath).replace(/\\/g, '/');
                 }
 
@@ -407,10 +410,15 @@ class DependencyParser {
                 for (const ext of possibleExtensions) {
                     const candidate = absoluteResolved + ext;
                     if (fs.existsSync(candidate)) {
-                        return (resolved + ext).replace(/\\/g, '/');
+                        const stat = fs.statSync(candidate);
+                        if (stat.isFile()) {
+                            return (resolved + ext).replace(/\\/g, '/');
+                        }
                     }
                 }
 
+                // Return the resolved path even if not found on disk - 
+                // the graph builder will try fuzzy matching
                 return resolved;
             }
 
@@ -491,6 +499,110 @@ class DependencyParser {
                 return path.normalize(resolved).replace(/\\/g, '/');
             }
         }
+    }
+
+    /**
+     * Strip comments from JSON-with-comments (tsconfig.json, jsconfig.json).
+     * Preserves string contents that may contain comment-like sequences.
+     * @param {string} content - Raw JSON string with possible comments
+     * @returns {string} JSON string with comments removed
+     */
+    _stripJsonComments(content) {
+        let result = '';
+        let i = 0;
+        let inString = false;
+        let stringChar = '';
+
+        while (i < content.length) {
+            if (inString) {
+                // Handle escape sequences inside strings
+                if (content[i] === '\\') {
+                    result += content[i] + (content[i + 1] || '');
+                    i += 2;
+                    continue;
+                }
+                if (content[i] === stringChar) {
+                    inString = false;
+                }
+                result += content[i];
+                i++;
+            } else {
+                // Check for string start
+                if (content[i] === '"' || content[i] === "'") {
+                    inString = true;
+                    stringChar = content[i];
+                    result += content[i];
+                    i++;
+                }
+                // Check for line comment
+                else if (content[i] === '/' && content[i + 1] === '/') {
+                    // Skip until end of line
+                    while (i < content.length && content[i] !== '\n') i++;
+                }
+                // Check for block comment
+                else if (content[i] === '/' && content[i + 1] === '*') {
+                    i += 2;
+                    while (i < content.length && !(content[i] === '*' && content[i + 1] === '/')) i++;
+                    i += 2; // Skip closing
+                }
+                else {
+                    result += content[i];
+                    i++;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get alias root directories from tsconfig/jsconfig.
+     * @param {string} workspacePath
+     * @returns {string[]} Array of root directory prefixes to try
+     */
+    _getAliasRoots(workspacePath) {
+        // Cache the result per workspace path
+        if (this._aliasRootsCache && this._aliasRootsCache.workspace === workspacePath) {
+            return this._aliasRootsCache.roots;
+        }
+
+        const roots = [];
+        const configFiles = ['tsconfig.json', 'jsconfig.json'];
+
+        for (const configFile of configFiles) {
+            const configPath = path.join(workspacePath, configFile);
+            try {
+                if (fs.existsSync(configPath)) {
+                    const rawContent = fs.readFileSync(configPath, 'utf-8');
+                    // Strip JSON comments while preserving string contents
+                    // Use a state machine approach to skip comments outside strings
+                    const stripped = this._stripJsonComments(rawContent)
+                        .replace(/,\s*([\]}])/g, '$1'); // trailing commas
+                    const config = JSON.parse(stripped);
+                    const paths = config?.compilerOptions?.paths;
+
+                    if (paths && paths['@/*']) {
+                        for (const mapping of paths['@/*']) {
+                            // mapping is like "./src/*" or "src/*" or "./*"
+                            let root = mapping.replace(/\/?\*$/, '');
+                            if (root.startsWith('./')) root = root.substring(2);
+                            if (root && !root.endsWith('/')) root += '/';
+                            roots.push(root);
+                        }
+                    }
+                    break; // Found a config, stop looking
+                }
+            } catch (err) {
+                console.warn(`Failed to parse ${configFile}: ${err.message}`);
+            }
+        }
+
+        // Always include common defaults as fallback
+        if (!roots.includes('src/')) roots.push('src/');
+        if (!roots.includes('app/')) roots.push('app/');
+        if (!roots.includes('')) roots.push('');
+
+        this._aliasRootsCache = { workspace: workspacePath, roots };
+        return roots;
     }
 
     /**
