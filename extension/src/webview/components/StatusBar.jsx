@@ -1,9 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import useStore from '../store/useStore';
 
 export default function StatusBar() {
-    const { graph, isLoading, loadingMessage, cloudStatus, error } = useStore();
+    const { graph, isLoading, loadingMessage, cloudStatus, error, clearError } = useStore();
 
+    // Auto-clear errors after 6 seconds
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => clearError(), 6000);
+            return () => clearTimeout(timer);
+        }
+    }, [error, clearError]);
     const nodeCount = graph ? Object.keys(graph.nodes).length : 0;
     const edgeCount = graph ? graph.edges.length : 0;
     const lastUpdated = graph?.metadata?.lastUpdated

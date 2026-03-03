@@ -1,6 +1,15 @@
+// ============================================================
+// IMPORTANT: Replace this URL after running `npx serverless deploy`
+// in the backend/ folder. The deploy output will give you the URL.
+// ============================================================
+const DEFAULT_API_ENDPOINT = 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com'; // e.g. 'https://abc123.execute-api.us-east-1.amazonaws.com'
+
+/** How long to keep the circuit open after a backend failure (5 min) */
+const CIRCUIT_RESET_MS = 5 * 60 * 1000;
+
 /**
  * API Client for communicating with the CodeChronicle AWS backend.
- * Handles requests to API Gateway, retry logic, and graceful fallback.
+ * Handles requests to API Gateway, retry logic, circuit-breaker, and graceful fallback.
  */
 class APIClient {
     /**
@@ -8,19 +17,65 @@ class APIClient {
      */
     constructor(config) {
         this.config = config;
-        this.endpoint = config.get('awsApiEndpoint') || '';
+        const userEndpoint = config.get('awsApiEndpoint');
+        this.endpoint = userEndpoint || DEFAULT_API_ENDPOINT;
         this.region = config.get('awsRegion') || 'us-east-1';
-        this.enabled = config.get('enableCloudAI') || false;
-        this.maxRetries = 3;
+        this.enabled = config.get('enableCloudAI') !== false && !!this.endpoint;
+        this.maxRetries = 2;
         this.baseDelay = 1000;
+
+        // Circuit-breaker state
+        this._circuitOpen = false;
+        this._circuitOpenedAt = 0;
+        this._consecutiveFailures = 0;
     }
 
     /**
-     * Check if cloud AI is enabled and configured.
+     * Check if cloud AI is enabled, configured, and circuit is closed.
      * @returns {boolean}
      */
     isAvailable() {
-        return this.enabled && !!this.endpoint;
+        if (!this.enabled || !this.endpoint) return false;
+
+        // Auto-reset circuit after CIRCUIT_RESET_MS
+        if (this._circuitOpen && (Date.now() - this._circuitOpenedAt) > CIRCUIT_RESET_MS) {
+            console.log('APIClient: circuit-breaker reset — will retry backend.');
+            this._circuitOpen = false;
+            this._consecutiveFailures = 0;
+        }
+
+        return !this._circuitOpen;
+    }
+
+    /**
+     * Lightweight health check — validates the endpoint is reachable.
+     * @returns {Promise<'connected'|'disconnected'>}
+     */
+    async healthCheck() {
+        if (!this.enabled || !this.endpoint) return 'disconnected';
+
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(`${this.endpoint}/cache/healthcheck`, {
+                method: 'GET',
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
+
+            // Any response (even 400/404) means the endpoint is reachable
+            if (res.status < 500) {
+                this._circuitOpen = false;
+                this._consecutiveFailures = 0;
+                return 'connected';
+            }
+            this._openCircuit();
+            return 'disconnected';
+        } catch {
+            this._openCircuit();
+            return 'disconnected';
+        }
     }
 
     /**
@@ -30,7 +85,7 @@ class APIClient {
      */
     async requestSummary(request) {
         if (!this.isAvailable()) {
-            throw new Error('Cloud AI not configured. Enable it in settings.');
+            throw new Error('Cloud AI is currently unavailable.');
         }
 
         return this.makeRequest('/ai/explain', {
@@ -52,7 +107,7 @@ class APIClient {
      */
     async requestRiskAssessment(request) {
         if (!this.isAvailable()) {
-            throw new Error('Cloud AI not configured. Enable it in settings.');
+            throw new Error('Cloud AI is currently unavailable.');
         }
 
         return this.makeRequest('/ai/risk-score', {
@@ -74,10 +129,10 @@ class APIClient {
      */
     async processQuery(request) {
         if (!this.isAvailable()) {
-            throw new Error('Cloud AI not configured. Enable it in settings.');
+            throw new Error('Cloud AI is currently unavailable.');
         }
 
-        return this.makeRequest('/ai/blast-radius', {
+        return this.makeRequest('/ai/query', {
             method: 'POST',
             body: {
                 query: request.query,
@@ -104,6 +159,7 @@ class APIClient {
 
     /**
      * Make an HTTP request with retry logic and exponential backoff.
+     * Opens the circuit-breaker on repeated server errors.
      * @param {string} path
      * @param {Object} options
      * @returns {Promise<Object>}
@@ -136,22 +192,60 @@ class APIClient {
                 }
 
                 if (!response.ok) {
-                    throw new Error(`API error: ${response.status} ${response.statusText}`);
+                    // Read error body for debugging
+                    let errorDetail = '';
+                    try {
+                        const errorBody = await response.json();
+                        errorDetail = errorBody.details || errorBody.error || '';
+                        console.error(`API ${response.status} response:`, JSON.stringify(errorBody));
+                    } catch { /* ignore parse errors */ }
+
+                    const errorMsg = errorDetail
+                        ? `API error: ${response.status} — ${errorDetail}`
+                        : `API error: ${response.status} ${response.statusText}`;
+
+                    if (response.status >= 500) {
+                        this._consecutiveFailures++;
+                        if (this._consecutiveFailures >= 2) {
+                            this._openCircuit();
+                        }
+                    }
+                    if (response.status >= 400 && response.status < 500) {
+                        // Client error — no retry
+                        throw new Error(errorMsg);
+                    }
+                    // Server error — will retry
+                    throw new Error(errorMsg);
                 }
 
+                // Success — reset failure counter
+                this._consecutiveFailures = 0;
                 return await response.json();
             } catch (err) {
                 lastError = err;
 
-                if (attempt < this.maxRetries) {
-                    const delay = this.baseDelay * Math.pow(2, attempt);
-                    console.warn(`Request failed (attempt ${attempt + 1}/${this.maxRetries + 1}). Retrying in ${delay}ms...`);
-                    await this.sleep(delay);
+                // Don't retry on client errors (4xx)
+                const isClientError = err.message && err.message.includes('API error: 4');
+                if (isClientError || attempt >= this.maxRetries) {
+                    break;
                 }
+
+                const delay = this.baseDelay * Math.pow(2, attempt);
+                console.warn(`Request failed (attempt ${attempt + 1}/${this.maxRetries + 1}). Retrying in ${delay}ms...`);
+                await this.sleep(delay);
             }
         }
 
         throw lastError || new Error('Request failed after maximum retries');
+    }
+
+    /** Open the circuit-breaker to stop further requests. */
+    _openCircuit() {
+        if (!this._circuitOpen) {
+            console.warn('APIClient: circuit-breaker OPEN — backend appears unavailable. Will retry in 5 minutes.');
+        }
+        this._circuitOpen = true;
+        this._circuitOpenedAt = Date.now();
     }
 
     /**

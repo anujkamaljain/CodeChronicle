@@ -52,22 +52,35 @@ class GraphBuilder {
         }
 
         // Create edges from dependencies
+        let totalLocalDeps = 0;
+        let matchedEdges = 0;
+
         for (const [sourceFile, deps] of dependencies.entries()) {
             if (!deps) continue;
 
+            // Normalize source file key to forward slashes
+            const normalizedSource = sourceFile.replace(/\\/g, '/');
+
             for (const dep of deps) {
                 if (dep.isExternal || !dep.resolvedPath) continue;
+                totalLocalDeps++;
 
-                // Normalize the resolved path
-                const targetFile = dep.resolvedPath.replace(/\\/g, '/');
+                // Normalize the resolved path to forward slashes
+                let targetFile = dep.resolvedPath.replace(/\\/g, '/');
+
+                // Remove leading ./ if present
+                if (targetFile.startsWith('./')) {
+                    targetFile = targetFile.substring(2);
+                }
 
                 // Only create edge if target exists in our file set
                 if (nodes[targetFile]) {
-                    const edgeKey = `${sourceFile}->${targetFile}`;
+                    const edgeKey = `${normalizedSource}->${targetFile}`;
                     if (!edgeSet.has(edgeKey)) {
                         edgeSet.add(edgeKey);
+                        matchedEdges++;
                         edges.push({
-                            source: sourceFile,
+                            source: normalizedSource,
                             target: targetFile,
                             type: 'import',
                             lineNumber: dep.lineNumber,
@@ -76,6 +89,8 @@ class GraphBuilder {
                 }
             }
         }
+
+        console.log(`Graph edges: ${matchedEdges} matched out of ${totalLocalDeps} local dependencies`);
 
         // Compute dependency/dependent counts
         for (const edge of edges) {

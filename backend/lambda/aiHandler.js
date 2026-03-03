@@ -1,11 +1,11 @@
-const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
+const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-lite-v1:0';
 const SUMMARIES_TABLE = process.env.SUMMARIES_TABLE;
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
@@ -35,7 +35,7 @@ module.exports.explain = async (event) => {
         // Build prompt
         const prompt = buildSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents });
 
-        // Call Bedrock
+        // Call Bedrock via Converse API
         const aiResponse = await invokeModel(prompt);
         const summary = aiResponse.trim();
 
@@ -93,33 +93,26 @@ module.exports.query = async (event) => {
 };
 
 // ========================================
-// Helper: Invoke Bedrock model
+// Helper: Invoke Bedrock model via Converse API
 // ========================================
 async function invokeModel(prompt, maxTokens = 1024) {
-    const requestBody = {
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: maxTokens,
+    const command = new ConverseCommand({
+        modelId: MODEL_ID,
         messages: [
             {
                 role: 'user',
-                content: prompt,
+                content: [{ text: prompt }],
             },
         ],
-        temperature: 0.3,
-        top_p: 0.9,
-    };
-
-    const command = new InvokeModelCommand({
-        modelId: MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(requestBody),
+        inferenceConfig: {
+            maxTokens,
+            temperature: 0.3,
+            topP: 0.9,
+        },
     });
 
     const result = await bedrockClient.send(command);
-    const responseBody = JSON.parse(new TextDecoder().decode(result.body));
-
-    return responseBody.content[0].text;
+    return result.output.message.content[0].text;
 }
 
 // ========================================

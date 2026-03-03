@@ -1,4 +1,6 @@
 const vscode = require('vscode');
+const fs = require('fs');
+const path = require('path');
 const { WorkspaceScanner } = require('./analyzer/scanner');
 const { DependencyParser } = require('./analyzer/dependencyParser');
 const { GraphBuilder } = require('./graph/graphBuilder');
@@ -84,6 +86,9 @@ function activate(context) {
 
     // Try loading cached graph
     loadCachedGraph();
+
+    // Check cloud AI connectivity in the background
+    checkCloudStatus();
 
     console.log('CodeChronicle activated successfully!');
 }
@@ -194,76 +199,102 @@ async function scanWorkspace() {
 }
 
 async function showGraph(context) {
-    if (!state.graph) {
-        const choice = await vscode.window.showInformationMessage(
-            'CodeChronicle: No analysis data. Scan workspace first?',
-            'Scan Now',
-            'Cancel'
-        );
-        if (choice === 'Scan Now') {
-            await scanWorkspace();
-        }
-        if (!state.graph) return;
-    }
-
-    // Create webview panel
-    const panel = vscode.window.createWebviewPanel(
-        'codechronicle.graph',
-        'CodeChronicle Graph',
-        vscode.ViewColumn.One,
-        {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [
-                vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
-            ],
-        }
-    );
-
-    const webviewUri = panel.webview.asWebviewUri(
-        vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')
-    );
-
-    panel.webview.html = getWebviewContent(panel.webview, webviewUri);
-
-    // Send graph data once webview is ready
-    panel.webview.onDidReceiveMessage(async (message) => {
-        switch (message.type) {
-            case 'ready':
-                panel.webview.postMessage({
-                    type: 'init',
-                    graph: state.graph,
-                });
-                break;
-
-            case 'nodeClick':
-                handleNodeClick(panel, message.nodeId);
-                break;
-
-            case 'blastRadius':
-                handleBlastRadius(panel, message.nodeId);
-                break;
-
-            case 'query':
-                handleQuery(panel, message.query);
-                break;
-
-            case 'openFile':
-                openFileInEditor(message.path);
-                break;
-
-            case 'refresh':
+    try {
+        if (!state.graph) {
+            const choice = await vscode.window.showInformationMessage(
+                'CodeChronicle: No analysis data. Scan workspace first?',
+                'Scan Now',
+                'Cancel'
+            );
+            if (choice === 'Scan Now') {
                 await scanWorkspace();
-                if (state.graph) {
-                    panel.webview.postMessage({ type: 'init', graph: state.graph });
-                }
-                break;
-
-            case 'requestRisk':
-                handleRiskRequest(panel, message.nodeId);
-                break;
+            }
+            if (!state.graph) return;
         }
-    });
+
+        // Validate built webview assets exist. If not, the panel opens blank.
+        const webviewDistFsPath = path.join(context.extensionPath, 'dist', 'webview');
+        const jsPath = path.join(webviewDistFsPath, 'webview.js');
+        const cssPath = path.join(webviewDistFsPath, 'webview.css');
+        if (!fs.existsSync(jsPath) || !fs.existsSync(cssPath)) {
+            const missing = [
+                !fs.existsSync(jsPath) ? 'dist/webview/webview.js' : null,
+                !fs.existsSync(cssPath) ? 'dist/webview/webview.css' : null,
+            ].filter(Boolean);
+            throw new Error(
+                `Missing built webview assets: ${missing.join(', ')}. Run "npm run build" in the extension folder.`
+            );
+        }
+
+        console.log('CodeChronicle: Opening graph webview...');
+
+        // Create webview panel
+        const panel = vscode.window.createWebviewPanel(
+            'codechronicle.graph',
+            'CodeChronicle Graph',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
+                ],
+            }
+        );
+
+        const webviewUri = panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')
+        );
+
+        panel.webview.html = getWebviewContent(panel.webview, webviewUri);
+
+        // Send graph data once webview is ready
+        panel.webview.onDidReceiveMessage(async (message) => {
+            try {
+                switch (message.type) {
+                    case 'ready':
+                        panel.webview.postMessage({
+                            type: 'init',
+                            graph: state.graph,
+                        });
+                        break;
+
+                    case 'nodeClick':
+                        handleNodeClick(panel, message.nodeId);
+                        break;
+
+                    case 'blastRadius':
+                        handleBlastRadius(panel, message.nodeId);
+                        break;
+
+                    case 'query':
+                        handleQuery(panel, message.query);
+                        break;
+
+                    case 'openFile':
+                        openFileInEditor(message.path);
+                        break;
+
+                    case 'refresh':
+                        await scanWorkspace();
+                        if (state.graph) {
+                            panel.webview.postMessage({ type: 'init', graph: state.graph });
+                        }
+                        break;
+
+                    case 'requestRisk':
+                        handleRiskRequest(panel, message.nodeId);
+                        break;
+                }
+            } catch (err) {
+                console.error('CodeChronicle: Webview message handling failed:', err);
+                vscode.window.showErrorMessage(`CodeChronicle: Webview error - ${err.message}`);
+            }
+        });
+    } catch (err) {
+        console.error('CodeChronicle: Failed to open graph view:', err);
+        vscode.window.showErrorMessage(`CodeChronicle: Failed to open graph view - ${err.message}`);
+    }
 }
 
 async function handleNodeClick(panel, nodeId) {
@@ -279,9 +310,8 @@ async function handleNodeClick(panel, nodeId) {
         metrics: node.metrics,
     });
 
-    // If cloud AI is enabled, fetch AI summary
-    const config = vscode.workspace.getConfiguration('codechronicle');
-    if (config.get('enableCloudAI') && !node.summary) {
+    // If cloud AI is available, fetch AI summary
+    if (state.apiClient.isAvailable() && !node.summary) {
         try {
             const result = await state.apiClient.requestSummary({
                 filePath: node.path,
@@ -297,11 +327,12 @@ async function handleNodeClick(panel, nodeId) {
                 summary: result.summary,
                 cached: result.cached,
             });
+            // Mark cloud as connected on success
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
         } catch (err) {
-            panel.webview.postMessage({
-                type: 'error',
-                message: `AI summary unavailable: ${err.message}`,
-            });
+            console.warn('AI summary unavailable:', err.message);
+            // Update cloud status but don't show persistent error
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
         }
     }
 }
@@ -317,12 +348,11 @@ async function handleBlastRadius(panel, nodeId) {
 }
 
 async function handleQuery(panel, query) {
-    const config = vscode.workspace.getConfiguration('codechronicle');
-    if (!config.get('enableCloudAI')) {
+    if (!state.apiClient.isAvailable()) {
         panel.webview.postMessage({
             type: 'queryResult',
             result: {
-                answer: 'Cloud AI is disabled. Enable it in settings to use the query feature.',
+                answer: 'Cloud AI is not available. Deploy the backend and enable Cloud AI in settings to use the query feature.',
                 references: [],
                 confidence: 0,
             },
@@ -347,10 +377,16 @@ async function handleQuery(panel, query) {
         });
         panel.webview.postMessage({ type: 'queryResult', result });
     } catch (err) {
+        console.warn('Query failed:', err.message);
         panel.webview.postMessage({
-            type: 'error',
-            message: `Query failed: ${err.message}`,
+            type: 'queryResult',
+            result: {
+                answer: `Query failed: ${err.message}. The AI backend may be unavailable.`,
+                references: [],
+                confidence: 0,
+            },
         });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
     }
 }
 
@@ -358,8 +394,7 @@ async function handleRiskRequest(panel, nodeId) {
     const node = state.graph?.nodes[nodeId];
     if (!node) return;
 
-    const config = vscode.workspace.getConfiguration('codechronicle');
-    if (!config.get('enableCloudAI')) {
+    if (!state.apiClient.isAvailable()) {
         // Compute local risk based on metrics
         const localRisk = state.metricsEngine.computeLocalRisk(node);
         panel.webview.postMessage({
@@ -386,7 +421,9 @@ async function handleRiskRequest(panel, nodeId) {
             risk: result.riskFactor,
             cached: result.cached,
         });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
     } catch (err) {
+        console.warn('Risk assessment unavailable:', err.message);
         const localRisk = state.metricsEngine.computeLocalRisk(node);
         panel.webview.postMessage({
             type: 'risk',
@@ -394,6 +431,7 @@ async function handleRiskRequest(panel, nodeId) {
             risk: localRisk,
             cached: false,
         });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
     }
 }
 
@@ -466,6 +504,19 @@ async function predictBlastRadius() {
 
 async function refreshAnalysis() {
     await scanWorkspace();
+}
+
+async function checkCloudStatus() {
+    try {
+        const status = await state.apiClient.healthCheck();
+        console.log(`Cloud AI status: ${status}`);
+        // Post status to any open webview panels — they'll pick it up on next render
+        if (webviewProvider && webviewProvider._view) {
+            webviewProvider._view.webview.postMessage({ type: 'cloudStatus', status });
+        }
+    } catch (err) {
+        console.warn('Cloud health check failed:', err.message);
+    }
 }
 
 function updateStatusBar(status) {

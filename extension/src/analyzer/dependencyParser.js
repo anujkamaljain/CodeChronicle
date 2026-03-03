@@ -322,9 +322,14 @@ class DependencyParser {
 
                 const lineNumber = content.substring(0, match.index).split('\n').length;
                 const isExternal = this.isExternalImport(importPath, language);
-                const resolvedPath = isExternal
+                let resolvedPath = isExternal
                     ? null
                     : this.resolveImportPath(importPath, relativePath, workspacePath, language);
+
+                // Normalize to forward slashes (critical on Windows where path.join uses backslashes)
+                if (resolvedPath) {
+                    resolvedPath = resolvedPath.replace(/\\/g, '/');
+                }
 
                 dependencies.push({
                     importPath,
@@ -363,10 +368,33 @@ class DependencyParser {
         // Handle language-specific resolution
         switch (language) {
             case 'javascript': {
+                // Handle path aliases like @/ (commonly points to src/ or root)
+                if (importPath.startsWith('@/')) {
+                    const aliasPath = importPath.substring(2); // Remove @/
+                    // Try common alias targets: src/, root, app/
+                    const aliasRoots = ['src/', 'app/', ''];
+                    for (const root of aliasRoots) {
+                        const aliased = root + aliasPath;
+                        const possibleExts = ['', '.js', '.jsx', '.ts', '.tsx', '/index.js', '/index.jsx', '/index.ts', '/index.tsx'];
+                        for (const ext of possibleExts) {
+                            const candidate = path.join(workspacePath, aliased + ext);
+                            if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                                return (aliased + ext).replace(/\\/g, '/');
+                            }
+                        }
+                    }
+                    return ('src/' + aliasPath).replace(/\\/g, '/');
+                }
+
                 if (!importPath.startsWith('.') && !importPath.startsWith('/')) return null;
 
                 let resolved = path.join(currentDir, importPath);
                 resolved = path.normalize(resolved).replace(/\\/g, '/');
+
+                // Remove leading ./ if present for consistent matching
+                if (resolved.startsWith('./')) {
+                    resolved = resolved.substring(2);
+                }
 
                 // Try exact match
                 const possibleExtensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '/index.js', '/index.jsx', '/index.ts', '/index.tsx'];
@@ -379,7 +407,7 @@ class DependencyParser {
                 for (const ext of possibleExtensions) {
                     const candidate = absoluteResolved + ext;
                     if (fs.existsSync(candidate)) {
-                        return resolved + ext;
+                        return (resolved + ext).replace(/\\/g, '/');
                     }
                 }
 

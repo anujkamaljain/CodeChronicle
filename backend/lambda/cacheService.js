@@ -50,7 +50,7 @@ module.exports.get = async (event) => {
         }
 
         if (Object.keys(results).length === 0) {
-            return response(404, { error: 'No cached data found.' });
+            return response(200, { cached: false });
         }
 
         return response(200, results);
