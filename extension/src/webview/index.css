@@ -300,6 +300,241 @@
     background: linear-gradient(90deg, transparent, var(--border-glass), transparent);
     margin: 8px 0;
   }
+
+  /* ── Graph Tooltip ─────────────────────────────── */
+  .graph-tooltip {
+    position: absolute;
+    z-index: 100;
+    pointer-events: none;
+    background: rgba(10, 17, 34, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 180px;
+    max-width: 260px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), 0 0 15px rgba(0, 240, 255, 0.08);
+    animation: tooltip-in 0.15s ease-out;
+    font-family: 'Inter', sans-serif;
+  }
+
+  @keyframes tooltip-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .graph-tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 3px;
+  }
+
+  .graph-tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+  .graph-tooltip-name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .graph-tooltip-path {
+    font-size: 0.6875rem;
+    color: #64748b;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .graph-tooltip-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.15), transparent);
+    margin: 6px 0;
+  }
+
+  .graph-tooltip-metrics {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .graph-tooltip-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .graph-tooltip-metric-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+  }
+
+  .graph-tooltip-metric-lbl {
+    font-size: 0.5625rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .graph-tooltip-risk {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  /* ── Particle Canvas ───────────────────────────── */
+  .particle-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── Graph Controls ────────────────────────────── */
+  .graph-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .graph-control-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 17, 34, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .graph-control-btn:hover {
+    color: var(--neon-cyan);
+    border-color: rgba(0, 240, 255, 0.35);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+    background: rgba(0, 240, 255, 0.06);
+  }
+
+  /* ── Legend ─────────────────────────────────────── */
+  .graph-legend {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    z-index: 10;
+    min-width: 130px;
+    background: rgba(10, 17, 34, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .graph-legend-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+  }
+
+  .graph-legend-toggle:hover {
+    color: #94a3b8;
+  }
+
+  .graph-legend-title {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .graph-legend-chevron {
+    font-size: 0.75rem;
+  }
+
+  .graph-legend-body {
+    padding: 0 12px 10px;
+  }
+
+  .graph-legend-section {
+    margin-bottom: 4px;
+  }
+
+  .graph-legend-section-title {
+    font-size: 0.5625rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .graph-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 0;
+  }
+
+  .graph-legend-orb {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .graph-legend-ring {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: transparent;
+    border: 2px solid;
+  }
+
+  .graph-legend-label {
+    font-size: 0.6875rem;
+    color: #94a3b8;
+  }
+
+  .graph-legend-divider {
+    height: 1px;
+    background: rgba(148, 163, 184, 0.1);
+    margin: 6px 0;
+  }
+
+  /* ── High-risk pulse ────────────────────────────── */
+  @keyframes risk-pulse {
+    0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
+    50%      { border-color: rgba(239, 68, 68, 1); }
+  }
 }
 
 @layer utilities {

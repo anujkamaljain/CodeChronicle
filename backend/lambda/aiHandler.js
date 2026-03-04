@@ -68,7 +68,7 @@ module.exports.query = async (event) => {
         }
 
         const prompt = buildQueryPrompt({ query, graphContext, maxResults });
-        const aiResponse = await invokeModel(prompt);
+        const aiResponse = await invokeModel(prompt, 2048);
 
         // Try to parse structured response
         let result;
@@ -142,34 +142,43 @@ Return only the summary text, no additional formatting.`;
 }
 
 function buildQueryPrompt({ query, graphContext, maxResults }) {
-    const relevantFiles = graphContext?.relevantFiles
+    const fileEntries = graphContext?.relevantFiles
         ?.slice(0, maxResults || 10)
-        ?.map((f) => `- ${f.path}${f.summary ? `: ${f.summary}` : ''} (${f.metrics?.linesOfCode || '?'} LOC, centrality: ${f.metrics?.centralityScore || '?'})`)
-        ?.join('\n') || 'No files available.';
+        ?.map((f) => {
+            let entry = `### ${f.path}`;
+            if (f.summary) entry += `\nSummary: ${f.summary}`;
+            entry += `\n(${f.metrics?.linesOfCode || '?'} LOC, centrality: ${f.metrics?.centralityScore || '?'})`;
+            if (f.content) {
+                entry += `\n\`\`\`\n${f.content}\n\`\`\``;
+            }
+            return entry;
+        })
+        ?.join('\n\n') || 'No files available.';
 
-    return `You are answering questions about a codebase.
+    return `You are a code analysis assistant answering questions about a codebase. You have access to actual source code from the most relevant files.
 
 User Query: ${query}
 
 Codebase Context:
 Total Files: ${graphContext?.totalFiles || 'unknown'}
 
-Relevant Files:
-${relevantFiles}
+Relevant Files (ranked by relevance to the query):
+${fileEntries}
 
-Answer the user's question with:
-1. A clear, concise answer
-2. Specific file references with paths
-3. Suggested follow-up questions if helpful
+Instructions:
+- Give an ACCURATE and CONCISE answer based on the actual code provided above.
+- Reference specific files, function names, routes, or logic you can see in the code.
+- Do NOT guess or speculate. If the code doesn't clearly answer the question, say so.
+- Keep the answer brief but correct.
 
 Format your response as JSON:
 {
-  "answer": "Your answer here",
+  "answer": "Your concise, accurate answer here",
   "references": [
     {
       "path": "src/file.js",
       "lineNumbers": [],
-      "snippet": "relevant info"
+      "snippet": "relevant info from the code"
     }
   ],
   "suggestedQuestions": ["question1", "question2"],

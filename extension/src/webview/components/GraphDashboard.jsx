@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import cytoscape from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import useStore from '../store/useStore';
@@ -6,22 +6,255 @@ import useStore from '../store/useStore';
 // Register layout
 cytoscape.use(coseBilkent);
 
-// Risk color mapping
-const RISK_COLORS = {
-    low: '#10b981',
-    medium: '#f59e0b',
-    high: '#ef4444',
+// ── File-type color palette ──────────────────────────────────────────
+const EXT_COLORS = {
+    '.jsx': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.45)' },
+    '.tsx': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.45)' },
+    '.js': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
+    '.mjs': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
+    '.cjs': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
+    '.ts': { fill: '#6366f1', glow: 'rgba(99,102,241,0.40)' },
+    '.css': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
+    '.scss': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
+    '.sass': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
+    '.less': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
+    '.html': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
+    '.htm': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
+    '.vue': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
+    '.svelte': { fill: '#ef4444', glow: 'rgba(239,68,68,0.40)' },
+    '.py': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
+    '.pyw': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
+    '.java': { fill: '#f59e0b', glow: 'rgba(245,158,11,0.40)' },
+    '.json': { fill: '#f59e0b', glow: 'rgba(245,158,11,0.40)' },
+    '.go': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.40)' },
+    '.rs': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
+    '.rb': { fill: '#ef4444', glow: 'rgba(239,68,68,0.40)' },
+    '.php': { fill: '#a855f7', glow: 'rgba(168,85,247,0.40)' },
+    '.c': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
+    '.cpp': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
+    '.h': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
+    '.cs': { fill: '#a855f7', glow: 'rgba(168,85,247,0.40)' },
 };
 
-const DEFAULT_COLOR = '#3b82f6';
-const SELECTED_COLOR = '#00f0ff';
-const EDGE_COLOR = 'rgba(148, 163, 184, 0.15)';
-const EDGE_HIGHLIGHT = 'rgba(0, 240, 255, 0.5)';
+const DEFAULT_EXT_COLOR = { fill: '#8b5cf6', glow: 'rgba(139,92,246,0.35)' };
 
+// Risk overlays — used for border ring
+const RISK_RING = {
+    low: 'rgba(16,185,129,0.5)',
+    medium: 'rgba(245,158,11,0.7)',
+    high: 'rgba(239,68,68,0.8)',
+};
+
+const SELECTED_COLOR = '#00f0ff';
+const EDGE_BASE = 'rgba(148, 163, 184, 0.12)';
+const EDGE_HIGHLIGHT = 'rgba(0, 240, 255, 0.6)';
+
+// Helper: lighten a hex colour for gradient centre
+function lighten(hex, amt = 60) {
+    let r = parseInt(hex.slice(1, 3), 16);
+    let g = parseInt(hex.slice(3, 5), 16);
+    let b = parseInt(hex.slice(5, 7), 16);
+    r = Math.min(255, r + amt);
+    g = Math.min(255, g + amt);
+    b = Math.min(255, b + amt);
+    return `rgb(${r},${g},${b})`;
+}
+
+function getExtColor(ext) {
+    return EXT_COLORS[ext] || DEFAULT_EXT_COLOR;
+}
+
+// ── Particle Background (lightweight – 30 particles, static render) ──
+function ParticleCanvas() {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animId;
+        let w, h;
+
+        const particles = [];
+        const COUNT = 30; // reduced from 60 for performance
+
+        function resize() {
+            w = canvas.width = canvas.parentElement.clientWidth;
+            h = canvas.height = canvas.parentElement.clientHeight;
+        }
+
+        function init() {
+            resize();
+            particles.length = 0;
+            for (let i = 0; i < COUNT; i++) {
+                particles.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: Math.random() * 1.5 + 0.5,
+                    dx: (Math.random() - 0.5) * 0.15,
+                    dy: (Math.random() - 0.5) * 0.15,
+                    alpha: Math.random() * 0.3 + 0.08,
+                });
+            }
+        }
+
+        let lastTime = 0;
+        const FPS_INTERVAL = 1000 / 24; // cap at 24fps — enough for slow drift
+
+        function draw(timestamp) {
+            animId = requestAnimationFrame(draw);
+            const elapsed = timestamp - lastTime;
+            if (elapsed < FPS_INTERVAL) return;
+            lastTime = timestamp - (elapsed % FPS_INTERVAL);
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Subtle radial spotlight
+            const grd = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.6);
+            grd.addColorStop(0, 'rgba(6,182,212,0.03)');
+            grd.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, w, h);
+
+            for (const p of particles) {
+                p.x += p.dx;
+                p.y += p.dy;
+                if (p.x < 0) p.x = w;
+                if (p.x > w) p.x = 0;
+                if (p.y < 0) p.y = h;
+                if (p.y > h) p.y = 0;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(148,163,184,${p.alpha})`;
+                ctx.fill();
+            }
+        }
+
+        init();
+        animId = requestAnimationFrame(draw);
+
+        const obs = new ResizeObserver(resize);
+        obs.observe(canvas.parentElement);
+
+        return () => {
+            cancelAnimationFrame(animId);
+            obs.disconnect();
+        };
+    }, []);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            className="particle-canvas"
+        />
+    );
+}
+
+// ── Tooltip Component ────────────────────────────────────────────────
+function GraphTooltip({ data, position }) {
+    if (!data) return null;
+    const riskColors = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };
+    return (
+        <div
+            className="graph-tooltip"
+            style={{
+                left: position.x + 14,
+                top: position.y - 10,
+            }}
+        >
+            <div className="graph-tooltip-header">
+                <span
+                    className="graph-tooltip-dot"
+                    style={{ background: data.color }}
+                />
+                <span className="graph-tooltip-name">{data.label}</span>
+            </div>
+            <div className="graph-tooltip-path">{data.path}</div>
+            <div className="graph-tooltip-divider" />
+            <div className="graph-tooltip-metrics">
+                <div className="graph-tooltip-metric">
+                    <span className="graph-tooltip-metric-val">{data.linesOfCode ?? '–'}</span>
+                    <span className="graph-tooltip-metric-lbl">LOC</span>
+                </div>
+                <div className="graph-tooltip-metric">
+                    <span className="graph-tooltip-metric-val">{data.dependencyCount ?? 0}</span>
+                    <span className="graph-tooltip-metric-lbl">Deps</span>
+                </div>
+                <div className="graph-tooltip-metric">
+                    <span className="graph-tooltip-metric-val">{data.dependentCount ?? 0}</span>
+                    <span className="graph-tooltip-metric-lbl">Used by</span>
+                </div>
+            </div>
+            {data.riskLevel && (
+                <div className="graph-tooltip-risk" style={{ color: riskColors[data.riskLevel] || '#94a3b8' }}>
+                    ● {data.riskLevel.toUpperCase()} RISK
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Legend (file-type colors) ─────────────────────────────────────
+const LEGEND_ITEMS = [
+    { label: 'JSX / TSX', color: '#06b6d4' },
+    { label: 'JS / MJS', color: '#3b82f6' },
+    { label: 'TS', color: '#6366f1' },
+    { label: 'CSS/SCSS', color: '#ec4899' },
+    { label: 'HTML', color: '#f97316' },
+    { label: 'Python', color: '#10b981' },
+    { label: 'JSON/Java', color: '#f59e0b' },
+    { label: 'Other', color: '#8b5cf6' },
+];
+
+const RISK_LEGEND = [
+    { label: 'Low Risk', color: 'rgba(16,185,129,0.7)' },
+    { label: 'Medium Risk', color: 'rgba(245,158,11,0.7)' },
+    { label: 'High Risk', color: 'rgba(239,68,68,0.8)' },
+];
+
+function Legend() {
+    const [expanded, setExpanded] = useState(true);
+    return (
+        <div className="graph-legend">
+            <button className="graph-legend-toggle" onClick={() => setExpanded(!expanded)}>
+                <span className="graph-legend-title">LEGEND</span>
+                <span className="graph-legend-chevron">{expanded ? '▾' : '▸'}</span>
+            </button>
+            {expanded && (
+                <div className="graph-legend-body">
+                    <div className="graph-legend-section">
+                        <div className="graph-legend-section-title">File Types</div>
+                        {LEGEND_ITEMS.map((item) => (
+                            <div key={item.label} className="graph-legend-item">
+                                <span className="graph-legend-orb" style={{ background: item.color, boxShadow: `0 0 6px ${item.color}60` }} />
+                                <span className="graph-legend-label">{item.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="graph-legend-divider" />
+                    <div className="graph-legend-section">
+                        <div className="graph-legend-section-title">Risk (border ring)</div>
+                        {RISK_LEGEND.map((item) => (
+                            <div key={item.label} className="graph-legend-item">
+                                <span className="graph-legend-ring" style={{ borderColor: item.color }} />
+                                <span className="graph-legend-label">{item.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Main Component ───────────────────────────────────────────────────
 export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, selectedNode }) {
     const cyRef = useRef(null);
     const containerRef = useRef(null);
     const { highlightedNodes, blastRadiusMode } = useStore();
+    const [tooltip, setTooltip] = useState(null);
+    const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
     // Convert graph data to Cytoscape elements
     const elements = useMemo(() => {
@@ -30,7 +263,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         const nodes = Object.values(graph.nodes).map((node) => {
             const risk = node.riskFactor || node.localRisk;
             const riskLevel = risk?.level || 'low';
-            const size = Math.max(20, Math.min(60, 20 + (node.metrics.centralityScore || 0) * 40 + (node.metrics.dependentCount || 0) * 2));
+            const extColor = getExtColor(node.extension);
+            const size = Math.max(24, Math.min(70, 22 + (node.metrics.centralityScore || 0) * 50 + (node.metrics.dependentCount || 0) * 2.5));
 
             return {
                 data: {
@@ -46,7 +280,10 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                     dependentCount: node.metrics.dependentCount,
                     centralityScore: node.metrics.centralityScore,
                     size,
-                    color: RISK_COLORS[riskLevel] || DEFAULT_COLOR,
+                    color: extColor.fill,
+                    colorLight: lighten(extColor.fill, 80),
+                    glowColor: extColor.glow,
+                    riskRing: RISK_RING[riskLevel] || 'rgba(100,116,139,0.3)',
                 },
             };
         });
@@ -69,49 +306,91 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         const cy = cytoscape({
             container: containerRef.current,
             elements,
+            // Performance: render low-res texture while panning/zooming
+            textureOnViewport: true,
+            hideLabelsOnViewport: true,
             style: [
+                // ── Nodes ──────────────────────────────
                 {
                     selector: 'node',
                     style: {
-                        'background-color': 'data(color)',
                         'width': 'data(size)',
                         'height': 'data(size)',
+                        'background-color': 'data(color)',
+                        'background-opacity': 0.92,
+                        // Gradient fill for orb effect
+                        'background-fill': 'radial-gradient',
+                        'background-gradient-stop-colors': function (ele) {
+                            return `${ele.data('colorLight')} ${ele.data('color')} ${ele.data('color')}`;
+                        },
+                        'background-gradient-stop-positions': '0% 55% 100%',
+
+                        // Border ring (risk-based)
+                        'border-width': 2.5,
+                        'border-color': 'data(riskRing)',
+                        'border-opacity': 0.7,
+
+                        // Labels — always white on dark bg for readability
                         'label': 'data(label)',
-                        'color': '#e2e8f0',
-                        'font-size': '9px',
+                        'color': '#f1f5f9',
+                        'font-size': '10px',
                         'font-family': 'Inter, sans-serif',
                         'font-weight': '500',
                         'text-valign': 'bottom',
                         'text-halign': 'center',
-                        'text-margin-y': 6,
-                        'text-max-width': '80px',
+                        'text-margin-y': 8,
+                        'text-max-width': '90px',
                         'text-wrap': 'ellipsis',
-                        'border-width': 2,
-                        'border-color': 'data(color)',
-                        'border-opacity': 0.4,
-                        'background-opacity': 0.85,
-                        'overlay-opacity': 0,
-                        'shadow-blur': 15,
-                        'shadow-color': 'data(color)',
-                        'shadow-opacity': 0.25,
+                        'text-background-color': '#0a0f1e',
+                        'text-background-opacity': 0.85,
+                        'text-background-padding': '3px',
+                        'text-background-shape': 'roundrectangle',
+
+                        // Glow
+                        'shadow-blur': 12,
+                        'shadow-color': 'data(glowColor)',
+                        'shadow-opacity': 0.3,
                         'shadow-offset-x': 0,
                         'shadow-offset-y': 0,
-                        'transition-property': 'background-color, border-color, width, height, shadow-blur, shadow-opacity, opacity',
-                        'transition-duration': '0.2s',
-                        'transition-timing-function': 'ease-in-out-sine',
+                        'overlay-opacity': 0,
+
+                        // Minimal transitions for performance
+                        'transition-property': 'opacity, border-width, border-color',
+                        'transition-duration': '0.15s',
                     },
                 },
+                // Selected node — keep text white and readable
                 {
                     selector: 'node:selected',
                     style: {
-                        'background-color': SELECTED_COLOR,
+                        'border-color': SELECTED_COLOR,
+                        'border-width': 3.5,
+                        'border-opacity': 1,
+                        'shadow-blur': 25,
+                        'shadow-color': 'rgba(0,240,255,0.5)',
+                        'shadow-opacity': 0.6,
+                        'color': '#ffffff',
+                        'font-weight': '700',
+                        'text-background-color': 'rgba(0,50,60,0.9)',
+                        'text-background-opacity': 1,
+                    },
+                },
+                // Click-toggled: connected neighbor nodes
+                {
+                    selector: 'node.click-neighbor',
+                    style: {
                         'border-color': SELECTED_COLOR,
                         'border-width': 3,
-                        'shadow-blur': 30,
-                        'shadow-color': SELECTED_COLOR,
-                        'shadow-opacity': 0.6,
-                        'font-weight': '700',
-                        'color': SELECTED_COLOR,
+                        'border-opacity': 0.8,
+                        'shadow-blur': 20,
+                        'shadow-opacity': 0.5,
+                    },
+                },
+                // Click-toggled: dimmed non-connected nodes
+                {
+                    selector: 'node.click-dim',
+                    style: {
+                        'opacity': 0.12,
                     },
                 },
                 {
@@ -119,29 +398,59 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                     style: {
                         'border-color': '#a855f7',
                         'border-width': 3,
-                        'shadow-color': '#a855f7',
-                        'shadow-opacity': 0.5,
+                        'border-opacity': 1,
+                        'shadow-color': 'rgba(168,85,247,0.5)',
+                        'shadow-opacity': 0.6,
                         'shadow-blur': 20,
                     },
                 },
                 {
                     selector: 'node.dimmed',
                     style: {
-                        'opacity': 0.15,
+                        'opacity': 0.12,
                     },
                 },
                 {
+                    selector: 'node.high-risk-pulse',
+                    style: {
+                        'border-width': 3.5,
+                        'border-color': '#ef4444',
+                        'border-opacity': 1,
+                    },
+                },
+                // ── Edges ──────────────────────────────
+                {
                     selector: 'edge',
                     style: {
-                        'width': 1,
-                        'line-color': EDGE_COLOR,
-                        'target-arrow-color': EDGE_COLOR,
+                        'width': 1.4,
+                        'line-color': EDGE_BASE,
+                        'target-arrow-color': EDGE_BASE,
                         'target-arrow-shape': 'triangle',
-                        'arrow-scale': 0.7,
+                        'arrow-scale': 0.6,
                         'curve-style': 'bezier',
-                        'opacity': 0.6,
-                        'transition-property': 'line-color, target-arrow-color, opacity, width',
-                        'transition-duration': '0.2s',
+                        'opacity': 0.5,
+                        'line-cap': 'round',
+                        'transition-property': 'opacity, line-color, width',
+                        'transition-duration': '0.15s',
+                    },
+                },
+                // Click-toggled: connected edges
+                {
+                    selector: 'edge.click-highlight',
+                    style: {
+                        'line-color': EDGE_HIGHLIGHT,
+                        'target-arrow-color': EDGE_HIGHLIGHT,
+                        'width': 2.2,
+                        'opacity': 1,
+                        'line-style': 'dashed',
+                        'line-dash-pattern': [8, 4],
+                    },
+                },
+                // Click-toggled: dimmed edges
+                {
+                    selector: 'edge.click-dim',
+                    style: {
+                        'opacity': 0.04,
                     },
                 },
                 {
@@ -149,64 +458,84 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                     style: {
                         'line-color': EDGE_HIGHLIGHT,
                         'target-arrow-color': EDGE_HIGHLIGHT,
-                        'width': 2,
+                        'width': 2.2,
                         'opacity': 1,
+                        'line-style': 'dashed',
+                        'line-dash-pattern': [8, 4],
                     },
                 },
                 {
                     selector: 'edge.dimmed',
                     style: {
-                        'opacity': 0.05,
+                        'opacity': 0.04,
                     },
                 },
             ],
             layout: {
                 name: 'cose-bilkent',
-                animate: false,
+                animate: 'end',
+                animationDuration: 800,
+                animationEasing: 'ease-out',
                 quality: 'default',
                 nodeDimensionsIncludeLabels: true,
-                idealEdgeLength: 100,
-                nodeRepulsion: 8000,
+                idealEdgeLength: 150,
+                nodeRepulsion: 12000,
                 edgeElasticity: 0.45,
                 nestingFactor: 0.1,
-                gravity: 0.25,
+                gravity: 0.2,
                 numIter: 2500,
                 tile: true,
-                tilingPaddingVertical: 20,
-                tilingPaddingHorizontal: 20,
+                tilingPaddingVertical: 30,
+                tilingPaddingHorizontal: 30,
             },
-            minZoom: 0.1,
+            minZoom: 0.08,
             maxZoom: 5,
-            wheelSensitivity: 0.3,
+            wheelSensitivity: 0.25,
+            pixelRatio: 'auto',
         });
 
-        // Event handlers
+        // ── Click on node: toggle highlight of connected nodes ─────
         cy.on('tap', 'node', (evt) => {
             const nodeId = evt.target.id();
             onNodeClick(nodeId);
         });
 
+        // Click on background: deselect
         cy.on('tap', (evt) => {
             if (evt.target === cy) {
                 onNodeClick(null);
             }
         });
 
-        // Hover effects
+        // Hover: show tooltip only
         cy.on('mouseover', 'node', (evt) => {
             const node = evt.target;
-            node.style('shadow-blur', 25);
-            node.style('shadow-opacity', 0.5);
             containerRef.current.style.cursor = 'pointer';
+            setTooltip(node.data());
+            const renderedPos = node.renderedPosition();
+            setTooltipPos({ x: renderedPos.x, y: renderedPos.y });
         });
 
-        cy.on('mouseout', 'node', (evt) => {
-            const node = evt.target;
-            if (!node.selected()) {
-                node.style('shadow-blur', 15);
-                node.style('shadow-opacity', 0.25);
-            }
+        cy.on('mouseout', 'node', () => {
             containerRef.current.style.cursor = 'default';
+            setTooltip(null);
+        });
+
+        // Pulse high-risk nodes
+        const highRisk = cy.nodes().filter((n) => n.data('riskLevel') === 'high');
+        if (highRisk.length) {
+            let on = false;
+            const pulseInterval = setInterval(() => {
+                on = !on;
+                if (on) highRisk.addClass('high-risk-pulse');
+                else highRisk.removeClass('high-risk-pulse');
+            }, 1200);
+            cy.one('destroy', () => clearInterval(pulseInterval));
+        }
+
+        // Smooth fit after layout
+        cy.one('layoutstop', () => {
+            cy.animate({ fit: { padding: 50 }, duration: 400, easing: 'ease-out-cubic' });
         });
 
         cyRef.current = cy;
@@ -217,27 +546,31 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         };
     }, [elements]);
 
-    // Handle selection changes
+    // ── Handle selection + click-highlight toggle ─────────────────
     useEffect(() => {
         if (!cyRef.current) return;
         const cy = cyRef.current;
 
+        // Clear previous click-highlight state
+        cy.elements().removeClass('click-neighbor click-dim click-highlight');
         cy.nodes().unselect();
+        cy.edges().removeClass('highlighted');
+
         if (selectedNode) {
             const node = cy.getElementById(selectedNode);
             if (node.length) {
                 node.select();
 
-                // Highlight connected edges
-                cy.edges().removeClass('highlighted');
-                node.connectedEdges().addClass('highlighted');
+                // Highlight all connected nodes + edges, dim the rest
+                const neighborhood = node.closedNeighborhood();
+                neighborhood.nodes().not(node).addClass('click-neighbor');
+                neighborhood.edges().addClass('click-highlight');
+                cy.elements().not(neighborhood).addClass('click-dim');
             }
-        } else {
-            cy.edges().removeClass('highlighted');
         }
     }, [selectedNode]);
 
-    // Handle blast radius highlighting
+    // Handle blast radius highlighting (overrides click-highlight)
     useEffect(() => {
         if (!cyRef.current) return;
         const cy = cyRef.current;
@@ -246,6 +579,9 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         cy.edges().removeClass('highlighted dimmed');
 
         if (highlightedNodes.length > 0) {
+            // Also clear click states during blast radius
+            cy.elements().removeClass('click-neighbor click-dim click-highlight');
+
             const highlightSet = new Set(highlightedNodes);
 
             cy.nodes().forEach((node) => {
@@ -270,8 +606,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
 
     const handleFitView = useCallback(() => {
         if (cyRef.current) {
-            cyRef.current.fit(undefined, 50);
-            cyRef.current.animate({ zoom: cyRef.current.zoom() * 0.9, duration: 300 });
+            cyRef.current.animate({ fit: { padding: 50 }, duration: 400, easing: 'ease-out-cubic' });
         }
     }, []);
 
@@ -289,42 +624,44 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
 
     return (
         <div className="relative w-full h-full">
+            {/* Particle background */}
+            <ParticleCanvas />
+
             {/* Graph container */}
-            <div ref={containerRef} className="w-full h-full" />
+            <div ref={containerRef} className="w-full h-full" style={{ position: 'relative', zIndex: 1 }} />
+
+            {/* Tooltip */}
+            <GraphTooltip data={tooltip} position={tooltipPos} />
 
             {/* Graph controls */}
-            <div className="absolute bottom-4 left-4 flex flex-col gap-2">
-                <button onClick={handleZoomIn} className="glass-card-sm w-9 h-9 flex items-center justify-center text-sm hover:border-neon-cyan transition-all" style={{ color: 'var(--text-secondary)' }}>
-                    +
+            <div className="graph-controls">
+                <button onClick={handleZoomIn} className="graph-control-btn" title="Zoom in">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        <line x1="11" y1="8" x2="11" y2="14" />
+                        <line x1="8" y1="11" x2="14" y2="11" />
+                    </svg>
                 </button>
-                <button onClick={handleZoomOut} className="glass-card-sm w-9 h-9 flex items-center justify-center text-sm hover:border-neon-cyan transition-all" style={{ color: 'var(--text-secondary)' }}>
-                    −
+                <button onClick={handleZoomOut} className="graph-control-btn" title="Zoom out">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        <line x1="8" y1="11" x2="14" y2="11" />
+                    </svg>
                 </button>
-                <button onClick={handleFitView} className="glass-card-sm w-9 h-9 flex items-center justify-center text-xs hover:border-neon-cyan transition-all" style={{ color: 'var(--text-secondary)' }} title="Fit to view">
-                    ⊞
+                <button onClick={handleFitView} className="graph-control-btn" title="Fit to view">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                        <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                        <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                        <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                    </svg>
                 </button>
             </div>
 
             {/* Legend */}
-            <div className="absolute bottom-4 right-4 glass-card-sm p-3">
-                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>RISK LEVELS</div>
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ background: RISK_COLORS.low, boxShadow: `0 0 8px ${RISK_COLORS.low}50` }} />
-                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Low Risk</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ background: RISK_COLORS.medium, boxShadow: `0 0 8px ${RISK_COLORS.medium}50` }} />
-                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Medium Risk</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ background: RISK_COLORS.high, boxShadow: `0 0 8px ${RISK_COLORS.high}50` }} />
-                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>High Risk</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Node tooltip on hover - rendered via Cytoscape's built-in */}
+            <Legend />
         </div>
     );
 }

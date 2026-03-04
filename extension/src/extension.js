@@ -361,17 +361,35 @@ async function handleQuery(panel, query) {
     }
 
     try {
+        // Rank files by relevance to the query instead of taking arbitrary first N
+        const rankedFiles = rankFilesByRelevance(query, state.graph);
+        const topFiles = rankedFiles.slice(0, 10);
+
+        // Read actual file content for the top 5 most relevant files
+        const workspacePath = state.graph.metadata?.workspacePath || '';
+        const filesWithContent = topFiles.map((f, i) => {
+            const entry = {
+                path: f.path,
+                summary: f.summary,
+                metrics: f.metrics,
+            };
+            if (i < 5 && workspacePath) {
+                try {
+                    const absPath = path.join(workspacePath, f.path);
+                    const raw = fs.readFileSync(absPath, 'utf-8');
+                    entry.content = cleanCodeContent(raw).substring(0, 80000); // ~20000 tokens
+                } catch {
+                    // File not readable — skip content
+                }
+            }
+            return entry;
+        });
+
         const result = await state.apiClient.processQuery({
             query,
             graphContext: {
                 totalFiles: Object.keys(state.graph.nodes).length,
-                relevantFiles: Object.values(state.graph.nodes)
-                    .slice(0, 20)
-                    .map((n) => ({
-                        path: n.path,
-                        summary: n.summary,
-                        metrics: n.metrics,
-                    })),
+                relevantFiles: filesWithContent,
             },
             maxResults: 10,
         });
@@ -388,6 +406,119 @@ async function handleQuery(panel, query) {
         });
         panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
     }
+}
+
+/**
+ * Clean and normalize source code before sending to the LLM.
+ * Removes noise that wastes tokens while keeping all meaningful code intact.
+ */
+function cleanCodeContent(raw) {
+    let lines = raw.split('\n');
+
+    // 1. Strip leading license / copyright block comments (top of file)
+    if (lines.length > 0) {
+        let i = 0;
+        // Skip leading blank lines
+        while (i < lines.length && lines[i].trim() === '') i++;
+        // Check for block comment at top
+        if (i < lines.length && /^\s*\/\*/.test(lines[i])) {
+            const startIdx = i;
+            while (i < lines.length && !/\*\//.test(lines[i])) i++;
+            i++; // skip the closing */
+            const blockLen = i - startIdx;
+            // Only strip if it looks like a license header (> 3 lines)
+            if (blockLen > 3) {
+                lines.splice(startIdx, blockLen);
+            }
+        }
+    }
+
+    // 2. Trim trailing whitespace from each line
+    lines = lines.map(line => line.trimEnd());
+
+    // 3. Collapse multiple consecutive blank lines into a single blank line
+    const collapsed = [];
+    let prevBlank = false;
+    for (const line of lines) {
+        const isBlank = line.trim() === '';
+        if (isBlank && prevBlank) continue;
+        collapsed.push(line);
+        prevBlank = isBlank;
+    }
+
+    // 4. Remove large block comments (> 5 lines) in the body — typically JSDoc boilerplate
+    const result = [];
+    let idx = 0;
+    while (idx < collapsed.length) {
+        if (/^\s*\/\*/.test(collapsed[idx]) && !/\*\//.test(collapsed[idx])) {
+            const blockStart = idx;
+            while (idx < collapsed.length && !/\*\//.test(collapsed[idx])) idx++;
+            idx++; // skip closing */
+            const blockLen = idx - blockStart;
+            if (blockLen > 5) {
+                // Skip this large comment block
+                continue;
+            } else {
+                // Keep small comments
+                for (let j = blockStart; j < idx; j++) result.push(collapsed[j]);
+            }
+        } else {
+            result.push(collapsed[idx]);
+            idx++;
+        }
+    }
+
+    return result.join('\n');
+}
+
+/**
+ * Rank graph nodes by keyword relevance to the user's query.
+ * Returns nodes sorted by descending relevance score.
+ */
+function rankFilesByRelevance(query, graph) {
+    // Extract keywords: lowercase, remove short/common words
+    const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'in', 'of', 'to', 'and', 'or', 'for', 'how', 'what', 'where', 'which', 'this', 'that', 'does', 'do', 'can', 'me', 'my', 'it', 'its', 'be', 'being']);
+    const keywords = query
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 1 && !stopWords.has(w));
+
+    if (keywords.length === 0) {
+        // No meaningful keywords — fall back to high-centrality files
+        return Object.values(graph.nodes)
+            .sort((a, b) => (b.metrics?.centralityScore || 0) - (a.metrics?.centralityScore || 0))
+            .slice(0, 10);
+    }
+
+    const scored = Object.values(graph.nodes).map(node => {
+        let score = 0;
+        const pathLower = (node.path || '').toLowerCase();
+        const labelLower = (node.label || '').toLowerCase();
+        const summaryLower = (node.summary || '').toLowerCase();
+        const dirLower = (node.directory || '').toLowerCase();
+
+        for (const kw of keywords) {
+            // Path match (strong signal)
+            if (pathLower.includes(kw)) score += 3;
+            // Label/filename match (strong signal)
+            if (labelLower.includes(kw)) score += 4;
+            // Directory match
+            if (dirLower.includes(kw)) score += 2;
+            // Summary match (if available, strong signal)
+            if (summaryLower.includes(kw)) score += 5;
+        }
+
+        // Bonus for high-centrality files (likely important)
+        score += (node.metrics?.centralityScore || 0) * 0.5;
+        // Small bonus for files with summaries (more context available)
+        if (node.summary) score += 1;
+
+        return { ...node, _relevanceScore: score };
+    });
+
+    return scored
+        .sort((a, b) => b._relevanceScore - a._relevanceScore);
 }
 
 async function handleRiskRequest(panel, nodeId) {
