@@ -57,6 +57,12 @@ function activate(context) {
     // Webview provider (used for sidebar updates when graph changes)
     webviewProvider = new GraphWebviewProvider(context.extensionUri, state);
 
+    // Sidebar view provider (Activity Bar panel)
+    const sidebarProvider = new SidebarViewProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('codechronicle.welcome', sidebarProvider)
+    );
+
     // Register commands
     context.subscriptions.push(
         vscode.commands.registerCommand('codechronicle.scanWorkspace', () => scanWorkspace()),
@@ -1005,6 +1011,102 @@ function getNonce() {
         text += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return text;
+}
+
+class SidebarViewProvider {
+    constructor(extensionUri) {
+        this.extensionUri = extensionUri;
+    }
+
+    resolveWebviewView(webviewView) {
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'assets')],
+        };
+
+        const iconUri = webviewView.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'assets', 'icon.png')
+        );
+
+        webviewView.webview.html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    padding: 16px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo { width: 64px; height: 64px; border-radius: 12px; margin-bottom: 4px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  p { margin: 0; font-size: 12px; opacity: 0.75; text-align: center; line-height: 1.5; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 8px 12px; margin-top: 4px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: none; border-radius: 6px;
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+  }
+  .btn:hover { background: var(--vscode-button-hoverBackground); }
+  .btn-secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+  }
+  .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+  .divider { width: 100%; height: 1px; background: var(--vscode-widget-border); margin: 4px 0; }
+  .commands { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .cmd-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; padding: 6px 8px; border-radius: 4px; cursor: pointer;
+    color: var(--vscode-foreground); opacity: 0.85;
+  }
+  .cmd-item:hover { background: var(--vscode-list-hoverBackground); opacity: 1; }
+  .kbd { font-size: 10px; opacity: 0.5; margin-left: auto; font-family: var(--vscode-editor-font-family); }
+</style>
+</head>
+<body>
+  <img src="${iconUri}" alt="CodeChronicle" class="logo" />
+  <h2>CodeChronicle</h2>
+  <p>AI-powered codebase analysis with dependency graphs, blast radius prediction, and natural language exploration.</p>
+
+  <button class="btn" onclick="run('codechronicle.showGraph')">Open Graph View</button>
+  <button class="btn btn-secondary" onclick="run('codechronicle.scanWorkspace')">Scan Workspace</button>
+
+  <div class="divider"></div>
+
+  <div class="commands">
+    <div class="cmd-item" onclick="run('codechronicle.askAI')">
+      <span>Ask AI About Codebase</span>
+      <span class="kbd">Ctrl+Shift+P</span>
+    </div>
+    <div class="cmd-item" onclick="run('codechronicle.predictBlastRadius')">
+      <span>Predict Blast Radius</span>
+    </div>
+    <div class="cmd-item" onclick="run('codechronicle.refreshAnalysis')">
+      <span>Refresh Analysis</span>
+    </div>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    function run(cmd) { vscode.postMessage({ command: cmd }); }
+  </script>
+</body>
+</html>`;
+
+        webviewView.webview.onDidReceiveMessage((message) => {
+            if (message.command) {
+                vscode.commands.executeCommand(message.command);
+            }
+        });
+    }
 }
 
 function deactivate() {
