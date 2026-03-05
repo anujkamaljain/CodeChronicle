@@ -6,7 +6,7 @@ const SECTION_META = {
     'Connection Type': { icon: '⬡', color: '#3b82f6' },
     'What Gets Exchanged': { icon: '⇄', color: '#06b6d4' },
     "Why They're Connected": { icon: '◉', color: '#a855f7' },
-    'Coupling Assessment': { icon: '⚠', color: '#f59e0b' },
+    'Coupling Assessment': { icon: '!', color: '#f59e0b' },
     'Potential Improvements': { icon: '✦', color: '#10b981' },
 };
 

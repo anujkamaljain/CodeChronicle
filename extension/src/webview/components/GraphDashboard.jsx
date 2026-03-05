@@ -289,7 +289,10 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
     const containerRef = useRef(null);
     const { highlightedNodes, blastRadiusMode, sidebarOpen } = useStore();
     const [tooltip, setTooltip] = useState(null);
-    const [zoomLevel, setZoomLevel] = useState(100);
+    const zoomLabelRef = useRef(null);
+    const zoomTargetRef = useRef(null);
+    const zoomFrameRef = useRef(null);
+    const zoomMouseRef = useRef({ x: 0, y: 0 });
 
     // Resize Cytoscape canvas when sidebar opens/closes
     useEffect(() => {
@@ -381,7 +384,6 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
         const cy = cytoscape({
             container: containerRef.current,
             elements,
-            // Full canvas redraws during pan/zoom (avoids black-area rendering artefact)
             textureOnViewport: false,
             hideLabelsOnViewport: false,
             style: [
@@ -598,7 +600,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
             },
             minZoom: 0.08,
             maxZoom: 5,
-            wheelSensitivity: 0.25,
+            userZoomingEnabled: false,
             pixelRatio: 'auto',
         });
 
@@ -640,10 +642,61 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
             }
         });
 
-        // Track zoom level
-        cy.on('zoom', () => {
-            setZoomLevel(Math.round(cy.zoom() * 100));
-        });
+        // ── Smooth wheel zoom ─────────────────────────────────────
+        const LERP = 0.2;
+        const container = containerRef.current;
+
+        const updateZoomLabel = () => {
+            if (zoomLabelRef.current) {
+                zoomLabelRef.current.textContent = `${Math.round(cy.zoom() * 100)}%`;
+            }
+        };
+
+        const zoomLoop = () => {
+            if (zoomTargetRef.current === null) {
+                zoomFrameRef.current = null;
+                return;
+            }
+
+            const current = cy.zoom();
+            const target = zoomTargetRef.current;
+            const diff = target - current;
+
+            if (Math.abs(diff) < 0.0005) {
+                cy.zoom({ level: target, renderedPosition: zoomMouseRef.current });
+                zoomTargetRef.current = null;
+                zoomFrameRef.current = null;
+            } else {
+                cy.zoom({ level: current + diff * LERP, renderedPosition: zoomMouseRef.current });
+                zoomFrameRef.current = requestAnimationFrame(zoomLoop);
+            }
+            updateZoomLabel();
+        };
+
+        const wheelHandler = (e) => {
+            e.preventDefault();
+            if (!container) return;
+
+            cy.stop();
+
+            const rect = container.getBoundingClientRect();
+            zoomMouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+            let delta = -e.deltaY;
+            if (e.deltaMode === 1) delta *= 30;
+            if (e.deltaMode === 2) delta *= 300;
+
+            const factor = Math.exp(delta * 0.001);
+            const base = zoomTargetRef.current ?? cy.zoom();
+            zoomTargetRef.current = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), base * factor));
+
+            if (!zoomFrameRef.current) {
+                zoomFrameRef.current = requestAnimationFrame(zoomLoop);
+            }
+        };
+
+        container.addEventListener('wheel', wheelHandler, { passive: false });
+        cy.on('zoom', updateZoomLabel);
 
         // Drag-to-Pan cursor (#20)
         containerRef.current.style.cursor = 'grab';
@@ -704,6 +757,9 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
         cyRef.current = cy;
 
         return () => {
+            container.removeEventListener('wheel', wheelHandler);
+            if (zoomFrameRef.current) cancelAnimationFrame(zoomFrameRef.current);
+            zoomTargetRef.current = null;
             cy.destroy();
             cyRef.current = null;
         };
@@ -785,13 +841,17 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
 
     const handleZoomIn = useCallback(() => {
         if (cyRef.current) {
-            cyRef.current.animate({ zoom: cyRef.current.zoom() * 1.3, duration: 200 });
+            const cy = cyRef.current;
+            const center = { x: cy.width() / 2, y: cy.height() / 2 };
+            cy.animate({ zoom: { level: cy.zoom() * 1.3, renderedPosition: center }, duration: 300, easing: 'ease-out-cubic' });
         }
     }, []);
 
     const handleZoomOut = useCallback(() => {
         if (cyRef.current) {
-            cyRef.current.animate({ zoom: cyRef.current.zoom() * 0.7, duration: 200 });
+            const cy = cyRef.current;
+            const center = { x: cy.width() / 2, y: cy.height() / 2 };
+            cy.animate({ zoom: { level: cy.zoom() / 1.3, renderedPosition: center }, duration: 300, easing: 'ease-out-cubic' });
         }
     }, []);
 
@@ -843,14 +903,14 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         <line x1="8" y1="11" x2="14" y2="11" />
                     </svg>
                 </button>
-                <span style={{
+                <span ref={zoomLabelRef} style={{
                     fontSize: '0.6rem',
                     fontFamily: "'JetBrains Mono', monospace",
                     color: 'var(--text-muted)',
                     textAlign: 'center',
                     minWidth: 36,
                     display: 'block',
-                }}>{zoomLevel}%</span>
+                }}>100%</span>
                 <button onClick={handleZoomOut} className="graph-control-btn" title="Zoom out">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="11" cy="11" r="8" />

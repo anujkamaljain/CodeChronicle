@@ -8,7 +8,7 @@ const SECTION_META = {
     'Architecture Role': { icon: '△', color: '#a855f7' },
     'Dependency Analysis': { icon: '◎', color: '#ec4899' },
     'Data Flow & State Management': { icon: '⇄', color: '#10b981' },
-    'Risk & Complexity': { icon: '⚠', color: '#f59e0b' },
+    'Risk & Complexity': { icon: '!', color: '#f59e0b' },
     'Improvement Suggestions': { icon: '✦', color: '#22d3ee' },
 };
 

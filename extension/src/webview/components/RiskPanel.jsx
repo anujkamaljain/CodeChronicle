@@ -98,7 +98,7 @@ function HealthDashboard({ riskData, graph }) {
             <div className="space-y-2">
                 {stats.mostRisky && (
                     <div className="flex items-center gap-2 text-xs">
-                        <span style={{ color: 'var(--risk-high)' }}>⚠</span>
+                        <span style={{ color: 'var(--risk-high)' }}>!</span>
                         <span style={{ color: 'var(--text-muted)' }}>Most risky:</span>
                         <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>
                             {stats.mostRisky.label}
@@ -240,7 +240,7 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
                         color: 'var(--neon-cyan)',
                     }}
                 >
-                    📄 Export Report
+                    Export Report
                 </button>
             </div>
 
