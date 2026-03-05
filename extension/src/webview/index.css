@@ -70,6 +70,7 @@
 }
 
 @layer components {
+
   /* Glass card effect */
   .glass-card {
     background: var(--bg-glass);
@@ -256,9 +257,12 @@
   }
 
   @keyframes pulse-ring {
-    0%, 100% {
+
+    0%,
+    100% {
       box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4);
     }
+
     50% {
       box-shadow: 0 0 0 12px rgba(168, 85, 247, 0);
     }
@@ -266,12 +270,10 @@
 
   /* Shimmer loading effect */
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.02) 25%,
-      rgba(255, 255, 255, 0.06) 50%,
-      rgba(255, 255, 255, 0.02) 75%
-    );
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0.02) 25%,
+        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0.02) 75%);
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
   }
@@ -320,8 +322,15 @@
   }
 
   @keyframes tooltip-in {
-    from { opacity: 0; transform: translateY(4px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.97);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .graph-tooltip-header {
@@ -519,6 +528,13 @@
     border: 2px solid;
   }
 
+  .graph-legend-arrow {
+    width: 18px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
   .graph-legend-label {
     font-size: 0.6875rem;
     color: #94a3b8;
@@ -532,8 +548,15 @@
 
   /* ── High-risk pulse ────────────────────────────── */
   @keyframes risk-pulse {
-    0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
-    50%      { border-color: rgba(239, 68, 68, 1); }
+
+    0%,
+    100% {
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    50% {
+      border-color: rgba(239, 68, 68, 1);
+    }
   }
 }
 

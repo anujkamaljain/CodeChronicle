@@ -48,6 +48,8 @@ const RISK_RING = {
 const SELECTED_COLOR = '#00f0ff';
 const EDGE_BASE = 'rgba(148, 163, 184, 0.12)';
 const EDGE_HIGHLIGHT = 'rgba(0, 240, 255, 0.6)';
+const EDGE_DEPENDENCY = 'rgba(59, 130, 246, 0.85)';  // Blue — outgoing (this file imports)
+const EDGE_DEPENDENT = 'rgba(168, 85, 247, 0.85)';   // Purple — incoming (imports this file)
 
 // Helper: lighten a hex colour for gradient centre
 function lighten(hex, amt = 60) {
@@ -234,6 +236,18 @@ function Legend() {
                     </div>
                     <div className="graph-legend-divider" />
                     <div className="graph-legend-section">
+                        <div className="graph-legend-section-title">Arrows (on click)</div>
+                        <div className="graph-legend-item">
+                            <span className="graph-legend-arrow" style={{ background: 'rgba(59,130,246,0.85)' }} />
+                            <span className="graph-legend-label">Dependency (imports)</span>
+                        </div>
+                        <div className="graph-legend-item">
+                            <span className="graph-legend-arrow" style={{ background: 'rgba(168,85,247,0.85)' }} />
+                            <span className="graph-legend-label">Dependent (imported by)</span>
+                        </div>
+                    </div>
+                    <div className="graph-legend-divider" />
+                    <div className="graph-legend-section">
                         <div className="graph-legend-section-title">Risk (border ring)</div>
                         {RISK_LEGEND.map((item) => (
                             <div key={item.label} className="graph-legend-item">
@@ -302,6 +316,33 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
     // Initialize Cytoscape
     useEffect(() => {
         if (!containerRef.current || elements.length === 0) return;
+
+        // ── Dynamic layout params based on graph size ─────────────
+        const nodeCount = elements.filter((el) => !el.data.source).length;
+        let idealEdgeLength, nodeRepulsion, gravity, numIter, tilingPadding;
+
+        if (nodeCount > 80) {
+            // Large graph — maximum spacing
+            idealEdgeLength = 280;
+            nodeRepulsion = 35000;
+            gravity = 0.15;
+            numIter = 5000;
+            tilingPadding = 50;
+        } else if (nodeCount > 30) {
+            // Medium graph — moderate spacing
+            idealEdgeLength = 200;
+            nodeRepulsion = 20000;
+            gravity = 0.18;
+            numIter = 3500;
+            tilingPadding = 40;
+        } else {
+            // Small graph — compact and tight
+            idealEdgeLength = 150;
+            nodeRepulsion = 12000;
+            gravity = 0.2;
+            numIter = 2500;
+            tilingPadding = 30;
+        }
 
         const cy = cytoscape({
             container: containerRef.current,
@@ -434,12 +475,24 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                         'transition-duration': '0.15s',
                     },
                 },
-                // Click-toggled: connected edges
+                // Click-toggled: dependency edges (outgoing — blue)
                 {
-                    selector: 'edge.click-highlight',
+                    selector: 'edge.click-dependency',
                     style: {
-                        'line-color': EDGE_HIGHLIGHT,
-                        'target-arrow-color': EDGE_HIGHLIGHT,
+                        'line-color': EDGE_DEPENDENCY,
+                        'target-arrow-color': EDGE_DEPENDENCY,
+                        'width': 2.2,
+                        'opacity': 1,
+                        'line-style': 'dashed',
+                        'line-dash-pattern': [8, 4],
+                    },
+                },
+                // Click-toggled: dependent edges (incoming — purple)
+                {
+                    selector: 'edge.click-dependent',
+                    style: {
+                        'line-color': EDGE_DEPENDENT,
+                        'target-arrow-color': EDGE_DEPENDENT,
                         'width': 2.2,
                         'opacity': 1,
                         'line-style': 'dashed',
@@ -478,15 +531,15 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                 animationEasing: 'ease-out',
                 quality: 'default',
                 nodeDimensionsIncludeLabels: true,
-                idealEdgeLength: 150,
-                nodeRepulsion: 12000,
+                idealEdgeLength,
+                nodeRepulsion,
                 edgeElasticity: 0.45,
                 nestingFactor: 0.1,
-                gravity: 0.2,
-                numIter: 2500,
+                gravity,
+                numIter,
                 tile: true,
-                tilingPaddingVertical: 30,
-                tilingPaddingHorizontal: 30,
+                tilingPaddingVertical: tilingPadding,
+                tilingPaddingHorizontal: tilingPadding,
             },
             minZoom: 0.08,
             maxZoom: 5,
@@ -552,7 +605,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         const cy = cyRef.current;
 
         // Clear previous click-highlight state
-        cy.elements().removeClass('click-neighbor click-dim click-highlight');
+        cy.elements().removeClass('click-neighbor click-dim click-dependency click-dependent');
         cy.nodes().unselect();
         cy.edges().removeClass('highlighted');
 
@@ -561,10 +614,20 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
             if (node.length) {
                 node.select();
 
-                // Highlight all connected nodes + edges, dim the rest
+                // Highlight connected nodes, dim the rest
                 const neighborhood = node.closedNeighborhood();
                 neighborhood.nodes().not(node).addClass('click-neighbor');
-                neighborhood.edges().addClass('click-highlight');
+
+                // Color edges by direction:
+                // Dependencies (outgoing) = blue, Dependents (incoming) = purple
+                neighborhood.edges().forEach((edge) => {
+                    if (edge.source().id() === selectedNode) {
+                        edge.addClass('click-dependency');   // this file imports → blue
+                    } else {
+                        edge.addClass('click-dependent');    // imports this file → purple
+                    }
+                });
+
                 cy.elements().not(neighborhood).addClass('click-dim');
             }
         }

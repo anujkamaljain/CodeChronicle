@@ -3,15 +3,18 @@ import { motion } from 'framer-motion';
 import useStore from '../store/useStore';
 
 export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestRisk }) {
-    const { selectedNode, nodeDetails, nodeSummary, nodeRisk, setSidebarOpen } = useStore();
+    const { selectedNode, nodeDetails, nodeSummary, nodeLocalRisk, nodeAiRisk, setSidebarOpen } = useStore();
 
     if (!nodeDetails) return null;
 
     const { metrics, path, label, extension, directory } = nodeDetails;
-    const risk = nodeRisk || nodeDetails.riskFactor || nodeDetails.localRisk;
+    const localRisk = nodeLocalRisk || nodeDetails.localRisk;
+    const aiRisk = nodeAiRisk || nodeDetails.riskFactor;
+    // Use the best available risk for the badge
+    const displayRisk = aiRisk || localRisk;
 
-    const riskBadgeClass = risk
-        ? `risk-badge risk-badge-${risk.level}`
+    const riskBadgeClass = displayRisk
+        ? `risk-badge risk-badge-${displayRisk.level}`
         : 'risk-badge risk-badge-low';
 
     return (
@@ -47,7 +50,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                     {extension}
                 </span>
                 <span className={riskBadgeClass}>
-                    {risk ? `${risk.level} risk` : 'analyzing...'}
+                    {displayRisk ? `${displayRisk.level} risk` : 'analyzing...'}
                 </span>
             </div>
 
@@ -67,57 +70,59 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 </div>
             </div>
 
-            {/* Risk Score */}
-            {risk && (
-                <>
-                    <div className="separator" />
-                    <div className="mb-4">
-                        <h4 className="text-xs font-semibold mb-3 uppercase tracking-widest"
-                            style={{ color: 'var(--text-muted)' }}>
-                            Risk Assessment
-                        </h4>
-                        {/* Score bar */}
-                        <div className="mb-3">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Risk Score</span>
-                                <span className="text-sm font-bold font-mono"
-                                    style={{ color: risk.level === 'high' ? 'var(--risk-high)' : risk.level === 'medium' ? 'var(--risk-medium)' : 'var(--risk-low)' }}>
-                                    {risk.score}/100
-                                </span>
-                            </div>
-                            <div className="w-full h-2 rounded-full overflow-hidden"
-                                style={{ background: 'rgba(255,255,255,0.05)' }}>
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${risk.score}%` }}
-                                    transition={{ duration: 0.8, ease: 'easeOut' }}
-                                    className="h-full rounded-full"
-                                    style={{
-                                        background: risk.level === 'high'
-                                            ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
-                                            : risk.level === 'medium'
-                                                ? 'linear-gradient(90deg, #10b981, #f59e0b)'
-                                                : 'linear-gradient(90deg, #3b82f6, #10b981)',
-                                        boxShadow: `0 0 12px ${risk.level === 'high' ? '#ef4444' : risk.level === 'medium' ? '#f59e0b' : '#10b981'}40`,
-                                    }}
-                                />
-                            </div>
-                        </div>
+            {/* Risk Scores — Structural + AI */}
+            <div className="separator" />
+            <div className="mb-4">
+                <h4 className="text-xs font-semibold mb-3 uppercase tracking-widest"
+                    style={{ color: 'var(--text-muted)' }}>
+                    Risk Assessment
+                </h4>
 
-                        {/* Risk factors */}
-                        {risk.factors && risk.factors.length > 0 && (
-                            <div className="space-y-1.5">
-                                {risk.factors.map((factor, i) => (
-                                    <div key={i} className="flex items-start gap-2">
-                                        <span className="text-xs mt-0.5" style={{ color: 'var(--risk-medium)' }}>▸</span>
-                                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{factor}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                {/* Structural Risk — always available */}
+                {localRisk && (
+                    <RiskScoreBar
+                        label="Structural Risk"
+                        sublabel="Based on code metrics"
+                        risk={localRisk}
+                        accentColor="var(--neon-cyan)"
+                    />
+                )}
+
+                {/* AI Risk — only after clicking Analyze Risk */}
+                {aiRisk ? (
+                    <RiskScoreBar
+                        label="AI Risk"
+                        sublabel="AI-powered assessment"
+                        risk={aiRisk}
+                        accentColor="var(--neon-purple)"
+                    />
+                ) : (
+                    <div className="glass-card-sm p-2.5 mt-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs" style={{ color: 'var(--neon-purple)', opacity: 0.6 }}>⬡</span>
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Click <strong style={{ color: 'var(--neon-green)' }}>Analyze Risk</strong> for AI assessment
+                            </span>
+                        </div>
                     </div>
-                </>
-            )}
+                )}
+
+                {/* Risk factors from the best available source */}
+                {displayRisk?.factors && displayRisk.factors.length > 0 && (
+                    <div className="space-y-1.5 mt-3">
+                        <div className="text-xs font-semibold uppercase tracking-widest mb-1.5"
+                            style={{ color: 'var(--text-muted)', fontSize: '0.5625rem' }}>
+                            {aiRisk ? 'AI Factors' : 'Structural Factors'}
+                        </div>
+                        {displayRisk.factors.map((factor, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                                <span className="text-xs mt-0.5" style={{ color: 'var(--risk-medium)' }}>▸</span>
+                                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{factor}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* AI Summary */}
             <div className="separator" />
@@ -169,6 +174,43 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 </button>
             </div>
         </motion.div>
+    );
+}
+
+function RiskScoreBar({ label, sublabel, risk, accentColor }) {
+    const levelColor = risk.level === 'high' ? 'var(--risk-high)' : risk.level === 'medium' ? 'var(--risk-medium)' : 'var(--risk-low)';
+    const gradient = risk.level === 'high'
+        ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+        : risk.level === 'medium'
+            ? 'linear-gradient(90deg, #10b981, #f59e0b)'
+            : 'linear-gradient(90deg, #3b82f6, #10b981)';
+
+    return (
+        <div className="mb-2.5">
+            <div className="flex justify-between items-center mb-1">
+                <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '0.5625rem' }}>— {sublabel}</span>
+                </div>
+                <span className="text-sm font-bold font-mono" style={{ color: levelColor }}>
+                    {risk.score}/100
+                </span>
+            </div>
+            <div className="w-full h-2 rounded-full overflow-hidden"
+                style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${risk.score}%` }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                    className="h-full rounded-full"
+                    style={{
+                        background: gradient,
+                        boxShadow: `0 0 12px ${risk.level === 'high' ? '#ef4444' : risk.level === 'medium' ? '#f59e0b' : '#10b981'}40`,
+                    }}
+                />
+            </div>
+        </div>
     );
 }
 

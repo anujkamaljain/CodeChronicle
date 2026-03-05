@@ -27,7 +27,8 @@ const useStore = create((set, get) => ({
     sidebarOpen: true,
     nodeDetails: null,
     nodeSummary: null,
-    nodeRisk: null,
+    nodeLocalRisk: null,
+    nodeAiRisk: null,
 
     // Error state
     error: null,
@@ -38,7 +39,7 @@ const useStore = create((set, get) => ({
     setSelectedNode: (nodeId) => {
         const graph = get().graph;
         if (!graph || !nodeId) {
-            set({ selectedNode: null, nodeDetails: null, nodeSummary: null, nodeRisk: null });
+            set({ selectedNode: null, nodeDetails: null, nodeSummary: null, nodeLocalRisk: null, nodeAiRisk: null });
             return;
         }
         const node = graph.nodes[nodeId];
@@ -46,7 +47,8 @@ const useStore = create((set, get) => ({
             selectedNode: nodeId,
             nodeDetails: node || null,
             nodeSummary: node?.summary || null,
-            nodeRisk: node?.riskFactor || node?.localRisk || null,
+            nodeLocalRisk: node?.localRisk || null,
+            nodeAiRisk: node?.riskFactor || null,
             sidebarOpen: true,
         });
     },
@@ -68,7 +70,8 @@ const useStore = create((set, get) => ({
     setCloudStatus: (status) => set({ cloudStatus: status }),
     setSidebarOpen: (open) => set({ sidebarOpen: open }),
     setNodeSummary: (summary) => set({ nodeSummary: summary }),
-    setNodeRisk: (risk) => set({ nodeRisk: risk }),
+    setNodeLocalRisk: (risk) => set({ nodeLocalRisk: risk }),
+    setNodeAiRisk: (risk) => set({ nodeAiRisk: risk }),
     setError: (error) => set({ error }),
     clearError: () => set({ error: null }),
 }));

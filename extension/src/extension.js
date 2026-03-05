@@ -525,44 +525,39 @@ async function handleRiskRequest(panel, nodeId) {
     const node = state.graph?.nodes[nodeId];
     if (!node) return;
 
-    if (!state.apiClient.isAvailable()) {
-        // Compute local risk based on metrics
-        const localRisk = state.metricsEngine.computeLocalRisk(node);
-        panel.webview.postMessage({
-            type: 'risk',
-            nodeId,
-            risk: localRisk,
-            cached: false,
-        });
-        return;
-    }
+    // Always send structural risk first
+    const localRisk = state.metricsEngine.computeLocalRisk(node);
+    panel.webview.postMessage({
+        type: 'risk',
+        nodeId,
+        risk: localRisk,
+        isAiRisk: false,
+        cached: false,
+    });
 
-    try {
-        const result = await state.apiClient.requestRiskAssessment({
-            filePath: node.path,
-            fileHash: node.contentHash,
-            metrics: node.metrics,
-            dependencies: getNodeDependencies(nodeId),
-            dependents: getNodeDependents(nodeId),
-        });
-        node.riskFactor = result.riskFactor;
-        panel.webview.postMessage({
-            type: 'risk',
-            nodeId,
-            risk: result.riskFactor,
-            cached: result.cached,
-        });
-        panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
-    } catch (err) {
-        console.warn('Risk assessment unavailable:', err.message);
-        const localRisk = state.metricsEngine.computeLocalRisk(node);
-        panel.webview.postMessage({
-            type: 'risk',
-            nodeId,
-            risk: localRisk,
-            cached: false,
-        });
-        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+    // If cloud AI is available, also fetch AI risk assessment
+    if (state.apiClient.isAvailable()) {
+        try {
+            const result = await state.apiClient.requestRiskAssessment({
+                filePath: node.path,
+                fileHash: node.contentHash,
+                metrics: node.metrics,
+                dependencies: getNodeDependencies(nodeId),
+                dependents: getNodeDependents(nodeId),
+            });
+            node.riskFactor = result.riskFactor;
+            panel.webview.postMessage({
+                type: 'risk',
+                nodeId,
+                risk: result.riskFactor,
+                isAiRisk: true,
+                cached: result.cached,
+            });
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
+        } catch (err) {
+            console.warn('AI risk assessment unavailable:', err.message);
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        }
     }
 }
 

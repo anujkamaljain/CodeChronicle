@@ -19,7 +19,7 @@ const TABS = [
 export default function App({ vscode }) {
     const {
         graph, activeTab, setActiveTab, setGraph, setSelectedNode,
-        setBlastRadiusMode, setQueryResult, setNodeSummary, setNodeRisk,
+        setBlastRadiusMode, setQueryResult, setNodeSummary, setNodeLocalRisk, setNodeAiRisk,
         setCloudStatus, setError, addQueryToHistory, selectedNode,
         sidebarOpen, blastRadiusMode, setHighlightedNodes, setLoading,
     } = useStore();
@@ -40,7 +40,11 @@ export default function App({ vscode }) {
                     break;
 
                 case 'risk':
-                    setNodeRisk(message.risk);
+                    if (message.isAiRisk) {
+                        setNodeAiRisk(message.risk);
+                    } else {
+                        setNodeLocalRisk(message.risk);
+                    }
                     break;
 
                 case 'highlight':
