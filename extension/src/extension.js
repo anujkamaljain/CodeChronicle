@@ -302,23 +302,39 @@ async function handleNodeClick(panel, nodeId) {
     if (!node) return;
 
     // Send structural data immediately
+    const willFetchSummary = state.apiClient.isAvailable() && !node.summary;
     panel.webview.postMessage({
         type: 'summary',
         nodeId,
         summary: node.summary || null,
         cached: !!node.summary,
+        loading: willFetchSummary,
         metrics: node.metrics,
     });
 
     // If cloud AI is available, fetch AI summary
     if (state.apiClient.isAvailable() && !node.summary) {
         try {
+            // Read actual file content for richer AI analysis
+            let fileContent = null;
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders) {
+                try {
+                    const absPath = path.join(workspaceFolders[0].uri.fsPath, node.path);
+                    const raw = fs.readFileSync(absPath, 'utf-8');
+                    fileContent = cleanCodeContent(raw).substring(0, 80000); // ~20K tokens
+                } catch {
+                    // File not readable — proceed without content
+                }
+            }
+
             const result = await state.apiClient.requestSummary({
                 filePath: node.path,
                 fileHash: node.contentHash,
                 metrics: node.metrics,
                 dependencies: getNodeDependencies(nodeId),
                 dependents: getNodeDependents(nodeId),
+                fileContent,
             });
             node.summary = result.summary;
             panel.webview.postMessage({

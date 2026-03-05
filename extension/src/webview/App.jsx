@@ -22,6 +22,7 @@ export default function App({ vscode }) {
         setBlastRadiusMode, setQueryResult, setNodeSummary, setNodeLocalRisk, setNodeAiRisk,
         setCloudStatus, setError, addQueryToHistory, selectedNode,
         sidebarOpen, blastRadiusMode, setHighlightedNodes, setLoading,
+        setLoadingRisk, setLoadingBlast, isLoading, setLoadingSummary,
     } = useStore();
 
     // Listen for messages from the extension host
@@ -37,11 +38,16 @@ export default function App({ vscode }) {
 
                 case 'summary':
                     setNodeSummary(message.summary);
+                    setLoadingSummary(!!message.loading);
+                    if (message.summary) {
+                        useStore.getState().setSummaryCached(!!message.cached);
+                    }
                     break;
 
                 case 'risk':
                     if (message.isAiRisk) {
                         setNodeAiRisk(message.risk);
+                        setLoadingRisk(false);
                     } else {
                         setNodeLocalRisk(message.risk);
                     }
@@ -49,6 +55,7 @@ export default function App({ vscode }) {
 
                 case 'highlight':
                     setHighlightedNodes(message.nodeIds || []);
+                    setLoadingBlast(false);
                     if (message.blastRadius) {
                         setBlastRadiusMode(true, message.blastRadius);
                     }
@@ -229,8 +236,9 @@ export default function App({ vscode }) {
                                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                                     Run &quot;CodeChronicle: Scan Workspace&quot; from the Command Palette
                                 </p>
-                                <button className="btn-neon" onClick={handleRefresh}>
-                                    Scan Workspace
+                                <button className={`btn-neon flex items-center justify-center gap-2 ${isLoading ? 'btn-loading' : ''}`} onClick={handleRefresh} disabled={isLoading}>
+                                    {isLoading && <span className="btn-spinner" />}
+                                    {isLoading ? 'Scanning...' : 'Scan Workspace'}
                                 </button>
                             </div>
                         </div>

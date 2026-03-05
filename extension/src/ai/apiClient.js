@@ -96,6 +96,7 @@ class APIClient {
                 metrics: request.metrics,
                 dependencies: request.dependencies,
                 dependents: request.dependents,
+                fileContent: request.fileContent || null,
             },
         });
     }

@@ -266,8 +266,20 @@ function Legend() {
 export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, selectedNode }) {
     const cyRef = useRef(null);
     const containerRef = useRef(null);
-    const { highlightedNodes, blastRadiusMode } = useStore();
+    const { highlightedNodes, blastRadiusMode, sidebarOpen } = useStore();
     const [tooltip, setTooltip] = useState(null);
+
+    // Resize Cytoscape canvas when sidebar opens/closes
+    useEffect(() => {
+        const cy = cyRef.current;
+        if (!cy) return;
+        // Wait for the sidebar animation to finish (200ms), then resize
+        const timer = setTimeout(() => {
+            cy.resize();
+            cy.invalidateSize();
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [sidebarOpen]);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
     // Convert graph data to Cytoscape elements
@@ -347,9 +359,9 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         const cy = cytoscape({
             container: containerRef.current,
             elements,
-            // Performance: render low-res texture while panning/zooming
-            textureOnViewport: true,
-            hideLabelsOnViewport: true,
+            // Full canvas redraws during pan/zoom (avoids black-area rendering artefact)
+            textureOnViewport: false,
+            hideLabelsOnViewport: false,
             style: [
                 // ── Nodes ──────────────────────────────
                 {

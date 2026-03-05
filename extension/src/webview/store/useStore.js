@@ -11,6 +11,11 @@ const useStore = create((set, get) => ({
     isLoading: false,
     loadingMessage: '',
 
+    // Per-button loading states
+    loadingRisk: false,
+    loadingBlast: false,
+    loadingSummary: false,
+
     // Blast radius state
     blastRadiusMode: false,
     blastRadiusData: null,
@@ -27,6 +32,7 @@ const useStore = create((set, get) => ({
     sidebarOpen: true,
     nodeDetails: null,
     nodeSummary: null,
+    summaryCached: false,
     nodeLocalRisk: null,
     nodeAiRisk: null,
 
@@ -70,8 +76,12 @@ const useStore = create((set, get) => ({
     setCloudStatus: (status) => set({ cloudStatus: status }),
     setSidebarOpen: (open) => set({ sidebarOpen: open }),
     setNodeSummary: (summary) => set({ nodeSummary: summary }),
+    setSummaryCached: (cached) => set({ summaryCached: cached }),
     setNodeLocalRisk: (risk) => set({ nodeLocalRisk: risk }),
     setNodeAiRisk: (risk) => set({ nodeAiRisk: risk }),
+    setLoadingRisk: (loading) => set({ loadingRisk: loading }),
+    setLoadingBlast: (loading) => set({ loadingBlast: loading }),
+    setLoadingSummary: (loading) => set({ loadingSummary: loading }),
     setError: (error) => set({ error }),
     clearError: () => set({ error: null }),
 }));

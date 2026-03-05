@@ -37,10 +37,11 @@ export default function Toolbar({ onRefresh }) {
                 <button
                     onClick={onRefresh}
                     disabled={isLoading}
-                    className="btn-neon text-xs py-1.5 px-3 disabled:opacity-30"
+                    className={`btn-neon text-xs py-1.5 px-3 flex items-center justify-center gap-1.5 ${isLoading ? 'btn-loading' : ''}`}
                     title="Rescan workspace"
                 >
-                    {isLoading ? '⟳ Scanning...' : '⟳ Refresh'}
+                    {isLoading ? <span className="btn-spinner" /> : '⟳'}
+                    {isLoading ? 'Scanning...' : 'Refresh'}
                 </button>
             </div>
         </div>

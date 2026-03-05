@@ -1,9 +1,26 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import useStore from '../store/useStore';
 
 export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestRisk }) {
-    const { selectedNode, nodeDetails, nodeSummary, nodeLocalRisk, nodeAiRisk, setSidebarOpen } = useStore();
+    const {
+        selectedNode, nodeDetails, nodeSummary, nodeLocalRisk, nodeAiRisk,
+        setSidebarOpen, loadingRisk, loadingBlast, setLoadingRisk, setLoadingBlast,
+        loadingSummary, summaryCached,
+    } = useStore();
+
+    // Auto-clear loading states when data arrives
+    useEffect(() => {
+        if (nodeAiRisk && loadingRisk) setLoadingRisk(false);
+    }, [nodeAiRisk]);
+
+    useEffect(() => {
+        if (loadingBlast) {
+            // Blast radius resolves quickly (local compute), short delay for UX feel
+            const timer = setTimeout(() => setLoadingBlast(false), 600);
+            return () => clearTimeout(timer);
+        }
+    }, [loadingBlast]);
 
     if (!nodeDetails) return null;
 
@@ -16,6 +33,16 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
     const riskBadgeClass = displayRisk
         ? `risk-badge risk-badge-${displayRisk.level}`
         : 'risk-badge risk-badge-low';
+
+    const handleAnalyzeRisk = () => {
+        setLoadingRisk(true);
+        onRequestRisk(selectedNode);
+    };
+
+    const handleBlastRadius = () => {
+        setLoadingBlast(true);
+        onBlastRadius(selectedNode);
+    };
 
     return (
         <motion.div
@@ -81,7 +108,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 {/* Structural Risk — always available */}
                 {localRisk && (
                     <RiskScoreBar
-                        label="Structural Risk"
+                        label="Structural Risk Score"
                         sublabel="Based on code metrics"
                         risk={localRisk}
                         accentColor="var(--neon-cyan)"
@@ -91,7 +118,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 {/* AI Risk — only after clicking Analyze Risk */}
                 {aiRisk ? (
                     <RiskScoreBar
-                        label="AI Risk"
+                        label="AI Risk Score"
                         sublabel="AI-powered assessment"
                         risk={aiRisk}
                         accentColor="var(--neon-purple)"
@@ -130,7 +157,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 <h4 className="text-xs font-semibold mb-3 uppercase tracking-widest flex items-center gap-2"
                     style={{ color: 'var(--text-muted)' }}>
                     AI Summary
-                    {nodeSummary && (
+                    {summaryCached && nodeSummary && (
                         <span className="text-xs px-1.5 py-0.5 rounded"
                             style={{ background: 'rgba(16, 185, 129, 0.12)', color: 'var(--neon-green)', fontSize: '0.6rem' }}>
                             CACHED
@@ -141,6 +168,13 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                         {nodeSummary}
                     </p>
+                ) : loadingSummary ? (
+                    <div className="glass-card-sm p-3 flex items-center gap-3">
+                        <span className="btn-spinner" style={{ color: 'var(--neon-cyan)' }} />
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            Generating AI summary...
+                        </p>
+                    </div>
                 ) : (
                     <div className="glass-card-sm p-3">
                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -161,16 +195,20 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                     Open in Editor
                 </button>
                 <button
-                    onClick={() => onBlastRadius(selectedNode)}
-                    className="btn-neon-purple w-full text-center"
+                    onClick={handleBlastRadius}
+                    disabled={loadingBlast}
+                    className={`btn-neon btn-neon-purple w-full text-center flex items-center justify-center gap-2 ${loadingBlast ? 'btn-loading' : ''}`}
                 >
-                    Show Blast Radius
+                    {loadingBlast && <span className="btn-spinner" />}
+                    {loadingBlast ? 'Computing...' : 'Show Blast Radius'}
                 </button>
                 <button
-                    onClick={() => onRequestRisk(selectedNode)}
-                    className="btn-neon-green w-full text-center"
+                    onClick={handleAnalyzeRisk}
+                    disabled={loadingRisk}
+                    className={`btn-neon btn-neon-green w-full text-center flex items-center justify-center gap-2 ${loadingRisk ? 'btn-loading' : ''}`}
                 >
-                    Analyze Risk
+                    {loadingRisk && <span className="btn-spinner" />}
+                    {loadingRisk ? 'Analyzing...' : 'Analyze Risk'}
                 </button>
             </div>
         </motion.div>

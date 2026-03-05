@@ -63,9 +63,10 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                         <button
                             type="submit"
                             disabled={isLoading || !localQuery.trim()}
-                            className="btn-neon px-4 py-3 self-end flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                            className={`btn-neon px-4 py-3 self-end flex-shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed ${isLoading ? 'btn-loading' : ''}`}
                         >
-                            {isLoading ? '...' : 'Ask'}
+                            {isLoading ? <span className="btn-spinner" /> : null}
+                            {isLoading ? 'Asking...' : 'Ask'}
                         </button>
                     </div>
                 </div>
