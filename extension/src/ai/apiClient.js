@@ -102,6 +102,54 @@ class APIClient {
     }
 
     /**
+     * Request a detailed (7-section) AI summary.
+     * Uses a prefixed cache key to avoid collisions with concise summaries.
+     * @param {Object} request
+     * @returns {Promise<{summary: string, cached: boolean, timestamp: string}>}
+     */
+    async requestDetailedSummary(request) {
+        if (!this.isAvailable()) {
+            throw new Error('Cloud AI is currently unavailable.');
+        }
+
+        return this.makeRequest('/ai/explain', {
+            method: 'POST',
+            body: {
+                filePath: request.filePath,
+                fileHash: `detailed:${request.fileHash}`,
+                metrics: request.metrics,
+                dependencies: request.dependencies,
+                dependents: request.dependents,
+                fileContent: request.fileContent || null,
+                detailed: true,
+            },
+        });
+    }
+
+    /**
+     * Request AI analysis of the relationship between two connected files.
+     * @param {Object} request
+     * @returns {Promise<{summary: string, cached: boolean, timestamp: string}>}
+     */
+    async requestRelationshipAnalysis(request) {
+        if (!this.isAvailable()) {
+            throw new Error('Cloud AI is currently unavailable.');
+        }
+
+        return this.makeRequest('/ai/explain', {
+            method: 'POST',
+            body: {
+                relationship: {
+                    sourceFile: request.sourceFile,
+                    targetFile: request.targetFile,
+                    direction: request.direction,
+                    cacheKey: request.cacheKey,
+                },
+            },
+        });
+    }
+
+    /**
      * Request AI-powered risk assessment.
      * @param {Object} request
      * @returns {Promise<{riskFactor: Object, cached: boolean, timestamp: string}>}

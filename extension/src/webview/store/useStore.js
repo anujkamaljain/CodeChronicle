@@ -39,6 +39,19 @@ const useStore = create((set, get) => ({
     nodeLocalRisk: null,
     nodeAiRisk: null,
 
+    // Detailed summary modal state
+    nodeDetailedSummary: null,
+    detailedSummaryCached: false,
+    loadingDetailedSummary: false,
+    showDetailedModal: false,
+
+    // Relationship modal state
+    showRelationshipModal: false,
+    relationshipData: null,
+    relationshipSummary: null,
+    relationshipCached: false,
+    loadingRelationship: false,
+
     // Toast notifications
     toasts: [],
 
@@ -58,7 +71,18 @@ const useStore = create((set, get) => ({
     setSelectedNode: (nodeId) => {
         const graph = get().graph;
         if (!graph || !nodeId) {
-            set({ selectedNode: null, nodeDetails: null, nodeSummary: null, nodeLocalRisk: null, nodeAiRisk: null });
+            set({
+                selectedNode: null,
+                nodeDetails: null,
+                nodeSummary: null,
+                nodeLocalRisk: null,
+                nodeAiRisk: null,
+                nodeDetailedSummary: null,
+                detailedSummaryCached: false,
+                loadingDetailedSummary: false,
+                showDetailedModal: false,
+                sidebarOpen: false,
+            });
             return;
         }
         const node = graph.nodes[nodeId];
@@ -75,8 +99,15 @@ const useStore = create((set, get) => ({
     setHighlightedNodes: (nodes) => set({ highlightedNodes: nodes }),
     setActiveTab: (tab) => {
         const tabs = ['graph', 'blast', 'query', 'risk'];
-        const prevIdx = tabs.indexOf(get().activeTab);
-        set({ activeTab: tab, prevTabIndex: prevIdx });
+        const current = get().activeTab;
+        const prevIdx = tabs.indexOf(current);
+        const updates = { activeTab: tab, prevTabIndex: prevIdx };
+        if (current === 'blast' && tab !== 'blast') {
+            updates.highlightedNodes = [];
+            updates.blastRadiusMode = false;
+            updates.blastRadiusData = null;
+        }
+        set(updates);
     },
     setLoading: (loading, message) => set({ isLoading: loading, loadingMessage: message || '' }),
 
@@ -119,6 +150,19 @@ const useStore = create((set, get) => ({
 
     // AI progress actions
     setAiProgress: (progress) => set({ aiProgress: progress }),
+
+    // Detailed summary actions
+    setNodeDetailedSummary: (summary) => set({ nodeDetailedSummary: summary }),
+    setDetailedSummaryCached: (cached) => set({ detailedSummaryCached: cached }),
+    setLoadingDetailedSummary: (loading) => set({ loadingDetailedSummary: loading }),
+    setShowDetailedModal: (show) => set({ showDetailedModal: show }),
+
+    // Relationship modal actions
+    setShowRelationshipModal: (show) => set({ showRelationshipModal: show }),
+    setRelationshipData: (data) => set({ relationshipData: data }),
+    setRelationshipSummary: (summary) => set({ relationshipSummary: summary }),
+    setRelationshipCached: (cached) => set({ relationshipCached: cached }),
+    setLoadingRelationship: (loading) => set({ loadingRelationship: loading }),
 }));
 
 export default useStore;

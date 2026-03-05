@@ -15,16 +15,22 @@ const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 module.exports.explain = async (event) => {
     try {
         const body = JSON.parse(event.body || '{}');
-        const { filePath, fileHash, metrics, dependencies, dependents, fileContent } = body;
+        const { filePath, fileHash, metrics, dependencies, dependents, fileContent, detailed, relationship } = body;
+
+        if (relationship) {
+            return handleRelationshipExplain(relationship);
+        }
 
         if (!filePath || !fileHash) {
             return response(400, { error: 'filePath and fileHash are required.' });
         }
 
+        const cacheKey = detailed ? `detailed:${fileHash}` : fileHash;
+
         // Check DynamoDB cache first
-        const cached = await getCachedSummary(fileHash, filePath);
+        const cached = await getCachedSummary(cacheKey, filePath);
         if (cached) {
-            console.log(`Cache hit for summary: ${filePath}`);
+            console.log(`Cache hit for ${detailed ? 'detailed ' : ''}summary: ${filePath}`);
             return response(200, {
                 summary: cached.summary,
                 cached: true,
@@ -33,16 +39,20 @@ module.exports.explain = async (event) => {
         }
 
         // Build prompt
-        const prompt = buildSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents });
+        const prompt = detailed
+            ? buildDetailedSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents })
+            : buildSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents });
+
+        const maxTokens = detailed ? 4096 : 1024;
 
         // Call Bedrock via Converse API
-        const aiResponse = await invokeModel(prompt);
+        const aiResponse = await invokeModel(prompt, maxTokens);
         const summary = aiResponse.trim();
 
         // Cache in DynamoDB
-        await cacheSummary(fileHash, filePath, summary);
+        await cacheSummary(cacheKey, filePath, summary);
 
-        console.log(`Generated summary for: ${filePath}`);
+        console.log(`Generated ${detailed ? 'detailed ' : ''}summary for: ${filePath}`);
         return response(200, {
             summary,
             cached: false,
@@ -139,6 +149,112 @@ Generate a concise summary (2-3 sentences) explaining:
 3. Its role in the overall architecture
 
 Return only the summary text, no additional formatting.`;
+}
+
+function buildDetailedSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents }) {
+    return `You are an expert software architect performing a deep analysis of a source code file.
+
+File: ${filePath}
+${metrics ? `Lines of Code: ${metrics.linesOfCode}
+Dependencies: ${metrics.dependencyCount}
+Dependents: ${metrics.dependentCount}
+Centrality Score: ${metrics.centralityScore}` : ''}
+
+${fileContent ? `File Content:
+${fileContent.substring(0, 80000)}` : 'File content not provided — infer from file path, metrics, and dependency graph.'}
+
+${dependencies ? `This file imports: ${JSON.stringify(dependencies)}` : ''}
+${dependents ? `This file is imported by: ${JSON.stringify(dependents)}` : ''}
+
+Provide an exhaustive 7-section analysis. Use EXACTLY these section headers followed by a colon:
+
+Purpose & Overview:
+Explain what this file does, why it exists, and its primary responsibilities. Be thorough.
+
+Key Components:
+List and describe every major export, class, function, constant, or pattern. Explain what each does and how they relate.
+
+Architecture Role:
+Describe how this file fits into the broader codebase architecture. What layer does it belong to? What patterns does it implement?
+
+Dependency Analysis:
+Analyze its imports (what it depends on) and its dependents (what depends on it). Identify any tight coupling or circular risks.
+
+Data Flow & State Management:
+Trace how data enters, transforms, and exits this file. Identify state management patterns, side effects, and data boundaries.
+
+Risk & Complexity:
+Identify complexity hotspots, potential failure points, error handling gaps, security concerns, and maintainability issues.
+
+Improvement Suggestions:
+Provide concrete, actionable suggestions for refactoring, performance improvements, better error handling, or architectural changes.
+
+Write each section with 3-5 detailed sentences. Be specific — reference actual code constructs when possible.`;
+}
+
+async function handleRelationshipExplain(rel) {
+    const { sourceFile, targetFile, cacheKey } = rel;
+    if (!sourceFile?.path || !targetFile?.path) {
+        return response(400, { error: 'relationship requires sourceFile and targetFile with path.' });
+    }
+
+    const cached = await getCachedSummary(cacheKey, `${sourceFile.path}|${targetFile.path}`);
+    if (cached) {
+        return response(200, { summary: cached.summary, cached: true, timestamp: cached.timestamp });
+    }
+
+    const prompt = buildRelationshipPrompt(rel);
+    const aiResponse = await invokeModel(prompt, 2048);
+    const summary = aiResponse.trim();
+
+    await cacheSummary(cacheKey, `${sourceFile.path}|${targetFile.path}`, summary);
+
+    return response(200, { summary, cached: false, timestamp: new Date().toISOString() });
+}
+
+function buildRelationshipPrompt({ sourceFile, targetFile, direction }) {
+    const describeFile = (f) => {
+        let desc = `File: ${f.path}`;
+        if (f.metrics) {
+            desc += `\nLOC: ${f.metrics.linesOfCode}, Dependencies: ${f.metrics.dependencyCount}, Dependents: ${f.metrics.dependentCount}, Centrality: ${f.metrics.centralityScore}`;
+        }
+        if (f.summary) desc += `\nSummary: ${f.summary}`;
+        if (f.content) desc += `\n\nSource Code:\n${f.content.substring(0, 40000)}`;
+        return desc;
+    };
+
+    const arrow = direction === 'dependency' ? 'imports' : 'is imported by';
+
+    return `You are an expert software architect analyzing the relationship between two connected files in a codebase.
+
+${describeFile(sourceFile)}
+
+---
+
+${describeFile(targetFile)}
+
+---
+
+Connection: "${sourceFile.path}" ${arrow} "${targetFile.path}"
+
+Analyze this dependency relationship in detail. Use EXACTLY these section headers followed by a colon:
+
+Connection Type:
+What kind of dependency is this? (data import, component usage, utility consumption, configuration, type/interface sharing, etc.) Be specific about what is being imported and used.
+
+What Gets Exchanged:
+Precisely describe the exports/imports between these files — functions, classes, constants, types, or default exports. Name them specifically if you can infer from the code.
+
+Why They're Connected:
+Explain the architectural reason these files depend on each other. What purpose does this connection serve in the system design?
+
+Coupling Assessment:
+Rate the coupling (Loose / Moderate / Tight) and explain why. Is this dependency healthy or does it introduce risk? Could changes to one file break the other?
+
+Potential Improvements:
+If applicable, suggest ways to reduce coupling, improve the interface between them, or refactor the dependency. If the connection is clean, say so.
+
+Write 2-4 sentences per section. Be specific — reference actual code constructs when possible.`;
 }
 
 function buildQueryPrompt({ query, graphContext, maxResults }) {

@@ -1,12 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import useStore from '../store/useStore';
 
-export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestRisk }) {
+export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestRisk, onRequestDetailedSummary }) {
     const {
         selectedNode, nodeDetails, nodeSummary, nodeLocalRisk, nodeAiRisk,
-        setSidebarOpen, loadingRisk, loadingBlast, setLoadingRisk, setLoadingBlast,
-        loadingSummary, summaryCached,
+        setSidebarOpen, setSelectedNode, setHighlightedNodes, setBlastRadiusMode,
+        highlightedNodes, loadingRisk, loadingBlast, setLoadingRisk, setLoadingBlast,
+        loadingSummary, summaryCached, loadingDetailedSummary,
     } = useStore();
 
     // Auto-clear loading states when data arrives
@@ -22,12 +23,34 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
         }
     }, [loadingBlast]);
 
+    const scrollRef = useRef(null);
+    const [showScrollArrow, setShowScrollArrow] = useState(false);
+
+    const checkScrollable = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const hasMore = el.scrollHeight - el.scrollTop - el.clientHeight > 20;
+        setShowScrollArrow(hasMore);
+    }, []);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        checkScrollable();
+        el.addEventListener('scroll', checkScrollable, { passive: true });
+        const obs = new ResizeObserver(checkScrollable);
+        obs.observe(el);
+        return () => {
+            el.removeEventListener('scroll', checkScrollable);
+            obs.disconnect();
+        };
+    }, [checkScrollable, selectedNode]);
+
     if (!nodeDetails) return null;
 
     const { metrics, path, label, extension, directory } = nodeDetails;
     const localRisk = nodeLocalRisk || nodeDetails.localRisk;
     const aiRisk = nodeAiRisk || nodeDetails.riskFactor;
-    // Use the best available risk for the badge
     const displayRisk = aiRisk || localRisk;
 
     const riskBadgeClass = displayRisk
@@ -44,13 +67,19 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
         onBlastRadius(selectedNode);
     };
 
+    const handleScrollDown = () => {
+        const el = scrollRef.current;
+        if (el) el.scrollBy({ top: 150, behavior: 'smooth' });
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="w-[340px] h-full overflow-y-auto p-4"
+            className="w-[340px] h-full relative"
             style={{ background: 'var(--bg-secondary)' }}
         >
+            <div ref={scrollRef} className="h-full overflow-y-auto p-4">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0">
@@ -62,7 +91,13 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                     </p>
                 </div>
                 <button
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={() => {
+                        if (highlightedNodes.length > 0) {
+                            setHighlightedNodes([]);
+                            setBlastRadiusMode(false, null);
+                        }
+                        setSelectedNode(null);
+                    }}
                     className="ml-2 w-6 h-6 flex items-center justify-center rounded text-xs"
                     style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)' }}
                 >
@@ -163,6 +198,23 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                             CACHED
                         </span>
                     )}
+                    {nodeSummary && (
+                        <button
+                            onClick={() => onRequestDetailedSummary && onRequestDetailedSummary(selectedNode)}
+                            disabled={loadingDetailedSummary}
+                            className="ml-auto text-xs px-2 py-0.5 rounded transition-all"
+                            style={{
+                                background: loadingDetailedSummary ? 'rgba(0, 240, 255, 0.05)' : 'rgba(0, 240, 255, 0.08)',
+                                color: 'var(--neon-cyan)',
+                                border: '1px solid rgba(0, 240, 255, 0.25)',
+                                fontSize: '0.6rem',
+                                cursor: loadingDetailedSummary ? 'not-allowed' : 'pointer',
+                                opacity: loadingDetailedSummary ? 0.6 : 1,
+                            }}
+                        >
+                            {loadingDetailedSummary ? 'Loading...' : 'View in detail'}
+                        </button>
+                    )}
                 </h4>
                 {nodeSummary ? (
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
@@ -211,6 +263,16 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                     {loadingRisk ? 'Analyzing...' : 'Analyze Risk'}
                 </button>
             </div>
+            </div>
+
+            {/* Scroll-down arrow */}
+            {showScrollArrow && (
+                <div className="sidebar-scroll-arrow" onClick={handleScrollDown}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                </div>
+            )}
         </motion.div>
     );
 }

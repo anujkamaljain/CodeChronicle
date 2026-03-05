@@ -291,6 +291,14 @@ async function showGraph(context) {
                     case 'requestRisk':
                         handleRiskRequest(panel, message.nodeId);
                         break;
+
+                    case 'requestDetailedSummary':
+                        handleDetailedSummaryRequest(panel, message.nodeId);
+                        break;
+
+                    case 'requestRelationship':
+                        handleRelationshipRequest(panel, message.sourceId, message.targetId, message.direction);
+                        break;
                 }
             } catch (err) {
                 console.error('CodeChronicle: Webview message handling failed:', err);
@@ -622,6 +630,150 @@ async function handleRiskRequest(panel, nodeId) {
             console.warn('AI risk assessment unavailable:', err.message);
             panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
         }
+    }
+}
+
+async function handleDetailedSummaryRequest(panel, nodeId) {
+    const node = state.graph?.nodes[nodeId];
+    if (!node) return;
+
+    if (node.detailedSummary) {
+        panel.webview.postMessage({
+            type: 'detailedSummary',
+            nodeId,
+            summary: node.detailedSummary,
+            cached: true,
+        });
+        return;
+    }
+
+    if (!state.apiClient.isAvailable()) {
+        panel.webview.postMessage({
+            type: 'detailedSummary',
+            nodeId,
+            summary: null,
+            error: 'Cloud AI is not available. Deploy the backend and enable Cloud AI to use detailed summaries.',
+        });
+        return;
+    }
+
+    try {
+        let fileContent = null;
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+            try {
+                const absPath = path.join(workspaceFolders[0].uri.fsPath, node.path);
+                const raw = fs.readFileSync(absPath, 'utf-8');
+                fileContent = cleanCodeContent(raw).substring(0, 80000);
+            } catch {
+                // File not readable — proceed without content
+            }
+        }
+
+        const result = await state.apiClient.requestDetailedSummary({
+            filePath: node.path,
+            fileHash: node.contentHash,
+            metrics: node.metrics,
+            dependencies: getNodeDependencies(nodeId),
+            dependents: getNodeDependents(nodeId),
+            fileContent,
+        });
+
+        node.detailedSummary = result.summary;
+
+        panel.webview.postMessage({
+            type: 'detailedSummary',
+            nodeId,
+            summary: result.summary,
+            cached: result.cached,
+        });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
+    } catch (err) {
+        console.warn('Detailed summary unavailable:', err.message);
+        panel.webview.postMessage({
+            type: 'detailedSummary',
+            nodeId,
+            summary: null,
+            error: `Failed to generate detailed summary: ${err.message}`,
+        });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+    }
+}
+
+async function handleRelationshipRequest(panel, sourceId, targetId, direction) {
+    const sourceNode = state.graph?.nodes[sourceId];
+    const targetNode = state.graph?.nodes[targetId];
+    if (!sourceNode || !targetNode) return;
+
+    const pairKey = [sourceId, targetId].sort().join('|');
+    const cacheKey = `rel:${pairKey}`;
+
+    if (sourceNode._relationshipCache?.[pairKey]) {
+        panel.webview.postMessage({
+            type: 'relationshipResult',
+            sourceId, targetId,
+            summary: sourceNode._relationshipCache[pairKey],
+            cached: true,
+        });
+        return;
+    }
+
+    if (!state.apiClient.isAvailable()) {
+        panel.webview.postMessage({
+            type: 'relationshipResult',
+            sourceId, targetId,
+            summary: null,
+            error: 'Cloud AI is not available. Deploy the backend and enable Cloud AI.',
+        });
+        return;
+    }
+
+    try {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const readContent = (node) => {
+            if (!workspaceFolders) return null;
+            try {
+                const absPath = path.join(workspaceFolders[0].uri.fsPath, node.path);
+                return cleanCodeContent(fs.readFileSync(absPath, 'utf-8')).substring(0, 40000);
+            } catch { return null; }
+        };
+
+        const result = await state.apiClient.requestRelationshipAnalysis({
+            sourceFile: {
+                path: sourceNode.path,
+                metrics: sourceNode.metrics,
+                summary: sourceNode.summary || null,
+                content: readContent(sourceNode),
+            },
+            targetFile: {
+                path: targetNode.path,
+                metrics: targetNode.metrics,
+                summary: targetNode.summary || null,
+                content: readContent(targetNode),
+            },
+            direction,
+            cacheKey,
+        });
+
+        if (!sourceNode._relationshipCache) sourceNode._relationshipCache = {};
+        sourceNode._relationshipCache[pairKey] = result.summary;
+
+        panel.webview.postMessage({
+            type: 'relationshipResult',
+            sourceId, targetId,
+            summary: result.summary,
+            cached: result.cached,
+        });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
+    } catch (err) {
+        console.warn('Relationship analysis unavailable:', err.message);
+        panel.webview.postMessage({
+            type: 'relationshipResult',
+            sourceId, targetId,
+            summary: null,
+            error: `Failed to analyze relationship: ${err.message}`,
+        });
+        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
     }
 }
 

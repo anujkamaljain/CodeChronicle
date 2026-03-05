@@ -284,7 +284,7 @@ function Legend() {
 }
 
 // ── Main Component ───────────────────────────────────────────────────
-export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, selectedNode }) {
+export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEdgeClick, selectedNode }) {
     const cyRef = useRef(null);
     const containerRef = useRef(null);
     const { highlightedNodes, blastRadiusMode, sidebarOpen } = useStore();
@@ -608,9 +608,27 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
             onNodeClick(nodeId);
         });
 
-        // Click on background: deselect
+        // ── Click on glowing edge: analyze relationship ─────
+        cy.on('tap', 'edge', (evt) => {
+            const edge = evt.target;
+            const isGlowing = edge.hasClass('click-dependency') || edge.hasClass('click-dependent') || edge.hasClass('highlighted');
+            if (!isGlowing || !onEdgeClick) return;
+
+            const sourceId = edge.source().id();
+            const targetId = edge.target().id();
+            const direction = edge.hasClass('click-dependency') ? 'dependency' : 'dependent';
+            onEdgeClick(sourceId, targetId, direction);
+        });
+
+        // Click on background: deselect and clear blast radius
         cy.on('tap', (evt) => {
             if (evt.target === cy) {
+                cy.elements().removeClass('highlighted dimmed click-neighbor click-dim click-dependency click-dependent');
+                const store = useStore.getState();
+                if (store.highlightedNodes.length > 0) {
+                    store.setHighlightedNodes([]);
+                    store.setBlastRadiusMode(false, null);
+                }
                 onNodeClick(null);
             }
         });
@@ -652,6 +670,18 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         cy.on('mouseout', 'node', () => {
             containerRef.current.style.cursor = 'grab';
             setTooltip(null);
+        });
+
+        cy.on('mouseover', 'edge', (evt) => {
+            const edge = evt.target;
+            if (edge.hasClass('click-dependency') || edge.hasClass('click-dependent') || edge.hasClass('highlighted')) {
+                containerRef.current.style.cursor = 'pointer';
+            }
+        });
+
+        cy.on('mouseout', 'edge', () => {
+            if (!containerRef.current) return;
+            containerRef.current.style.cursor = 'grab';
         });
 
         // Pulse high-risk nodes
@@ -768,10 +798,17 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
     // Keyboard shortcuts
     useEffect(() => {
         const handler = (e) => {
-            // Esc: deselect node / close sidebar
             if (e.key === 'Escape') {
+                if (cyRef.current) {
+                    cyRef.current.elements().removeClass('highlighted dimmed click-neighbor click-dim click-dependency click-dependent');
+                }
+                const store = useStore.getState();
+                if (store.highlightedNodes.length > 0) {
+                    store.setHighlightedNodes([]);
+                    store.setBlastRadiusMode(false, null);
+                }
                 onNodeClick(null);
-                useStore.getState().setSearchQuery('');
+                store.setSearchQuery('');
             }
             // F: fit view (when not typing)
             if (e.key === 'f' && !e.ctrlKey && !e.metaKey && document.activeElement?.tagName !== 'INPUT') {

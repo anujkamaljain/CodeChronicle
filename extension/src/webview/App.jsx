@@ -9,6 +9,8 @@ import RiskPanel from './components/RiskPanel';
 import Toolbar from './components/Toolbar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
+import DetailedSummaryModal from './components/DetailedSummaryModal';
+import RelationshipModal from './components/RelationshipModal';
 
 const TABS = [
     { id: 'graph', label: 'Graph', icon: '◉' },
@@ -141,6 +143,30 @@ export default function App({ vscode }) {
                     addToast('AI query complete', 'success');
                     break;
 
+                case 'detailedSummary':
+                    useStore.getState().setLoadingDetailedSummary(false);
+                    if (message.summary) {
+                        useStore.getState().setNodeDetailedSummary(message.summary);
+                        useStore.getState().setDetailedSummaryCached(!!message.cached);
+                    } else if (message.error) {
+                        addToast(message.error, 'error');
+                        useStore.getState().setShowDetailedModal(false);
+                    }
+                    break;
+
+                case 'relationshipResult': {
+                    const s = useStore.getState();
+                    s.setLoadingRelationship(false);
+                    if (message.summary) {
+                        s.setRelationshipSummary(message.summary);
+                        s.setRelationshipCached(!!message.cached);
+                    } else if (message.error) {
+                        addToast(message.error, 'error');
+                        s.setShowRelationshipModal(false);
+                    }
+                    break;
+                }
+
                 case 'cloudStatus':
                     setCloudStatus(message.status);
                     break;
@@ -190,6 +216,31 @@ export default function App({ vscode }) {
         setTimeout(() => setAiProgress({ stage: 'sending', label: 'Sending to AI...' }), 400);
         setTimeout(() => setAiProgress({ stage: 'processing', label: 'Analyzing risk...' }), 1200);
         vscode.postMessage({ type: 'requestRisk', nodeId });
+    }, [vscode]);
+
+    const handleEdgeClick = useCallback((sourceId, targetId, direction) => {
+        const store = useStore.getState();
+        const g = store.graph;
+        if (!g) return;
+        const sourceNode = g.nodes[sourceId];
+        const targetNode = g.nodes[targetId];
+        if (!sourceNode || !targetNode) return;
+
+        store.setRelationshipData({ sourceNode, targetNode, direction });
+        store.setRelationshipSummary(null);
+        store.setRelationshipCached(false);
+        store.setLoadingRelationship(true);
+        store.setShowRelationshipModal(true);
+
+        vscode.postMessage({ type: 'requestRelationship', sourceId, targetId, direction });
+    }, [vscode]);
+
+    const handleRequestDetailedSummary = useCallback((nodeId) => {
+        const store = useStore.getState();
+        store.setLoadingDetailedSummary(true);
+        store.setShowDetailedModal(true);
+        store.setNodeDetailedSummary(null);
+        vscode.postMessage({ type: 'requestDetailedSummary', nodeId });
     }, [vscode]);
 
     // Compute tab slide direction
@@ -254,6 +305,7 @@ export default function App({ vscode }) {
                                     graph={graph}
                                     onNodeClick={handleNodeClick}
                                     onBlastRadius={handleBlastRadius}
+                                    onEdgeClick={handleEdgeClick}
                                     selectedNode={selectedNode}
                                 />
                             </motion.div>
@@ -354,6 +406,7 @@ export default function App({ vscode }) {
                                 onOpenFile={handleOpenFile}
                                 onBlastRadius={handleBlastRadius}
                                 onRequestRisk={handleRequestRisk}
+                                onRequestDetailedSummary={handleRequestDetailedSummary}
                             />
                         </motion.div>
                     )}
@@ -389,6 +442,12 @@ export default function App({ vscode }) {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Detailed Summary Modal */}
+            <DetailedSummaryModal />
+
+            {/* Relationship Modal */}
+            <RelationshipModal />
 
             {/* Bottom status bar */}
             <StatusBar />
