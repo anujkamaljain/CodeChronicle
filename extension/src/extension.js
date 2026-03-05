@@ -1076,8 +1076,8 @@ class SidebarViewProvider {
   <h2>CodeChronicle</h2>
   <p>AI-powered codebase analysis with dependency graphs, blast radius prediction, and natural language exploration.</p>
 
-  <button class="btn" onclick="run('codechronicle.showGraph')">Open Graph View</button>
-  <button class="btn btn-secondary" onclick="run('codechronicle.scanWorkspace')">Scan Workspace</button>
+  <button class="btn" onclick="run('codechronicle.scanWorkspace')">Scan Workspace</button>
+  <button class="btn btn-secondary" onclick="run('codechronicle.showGraph')">Open Graph View</button>
 
   <div class="divider"></div>
 
