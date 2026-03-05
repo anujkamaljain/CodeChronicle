@@ -21,7 +21,7 @@ export default function StatusBar() {
         <div className="flex items-center justify-between px-4 py-1.5 text-xs border-t"
             style={{
                 borderColor: 'var(--border-glass)',
-                background: 'rgba(5, 10, 20, 0.9)',
+                background: 'var(--bg-secondary)',
                 color: 'var(--text-muted)',
             }}>
 

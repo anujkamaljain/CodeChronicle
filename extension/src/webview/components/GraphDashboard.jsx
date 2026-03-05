@@ -9,48 +9,50 @@ cytoscape.use(coseBilkent);
 
 // ── File-type color palette ──────────────────────────────────────────
 const EXT_COLORS = {
-    '.jsx': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.45)' },
-    '.tsx': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.45)' },
-    '.js': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
-    '.mjs': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
-    '.cjs': { fill: '#3b82f6', glow: 'rgba(59,130,246,0.40)' },
-    '.ts': { fill: '#6366f1', glow: 'rgba(99,102,241,0.40)' },
-    '.css': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
-    '.scss': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
-    '.sass': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
-    '.less': { fill: '#ec4899', glow: 'rgba(236,72,153,0.40)' },
-    '.html': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
-    '.htm': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
-    '.vue': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
-    '.svelte': { fill: '#ef4444', glow: 'rgba(239,68,68,0.40)' },
-    '.py': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
-    '.pyw': { fill: '#10b981', glow: 'rgba(16,185,129,0.40)' },
-    '.java': { fill: '#f59e0b', glow: 'rgba(245,158,11,0.40)' },
-    '.json': { fill: '#f59e0b', glow: 'rgba(245,158,11,0.40)' },
-    '.go': { fill: '#06b6d4', glow: 'rgba(6,182,212,0.40)' },
-    '.rs': { fill: '#f97316', glow: 'rgba(249,115,22,0.40)' },
-    '.rb': { fill: '#ef4444', glow: 'rgba(239,68,68,0.40)' },
-    '.php': { fill: '#a855f7', glow: 'rgba(168,85,247,0.40)' },
-    '.c': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
-    '.cpp': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
-    '.h': { fill: '#64748b', glow: 'rgba(100,116,139,0.40)' },
-    '.cs': { fill: '#a855f7', glow: 'rgba(168,85,247,0.40)' },
+    '.jsx': { fill: '#60A5FA', glow: 'rgba(96,165,250,0.40)' },
+    '.tsx': { fill: '#60A5FA', glow: 'rgba(96,165,250,0.40)' },
+    '.js': { fill: '#38BDF8', glow: 'rgba(56,189,248,0.40)' },
+    '.mjs': { fill: '#38BDF8', glow: 'rgba(56,189,248,0.40)' },
+    '.cjs': { fill: '#38BDF8', glow: 'rgba(56,189,248,0.40)' },
+    '.ts': { fill: '#A78BFA', glow: 'rgba(167,139,250,0.40)' },
+    '.css': { fill: '#F472B6', glow: 'rgba(244,114,182,0.40)' },
+    '.scss': { fill: '#F472B6', glow: 'rgba(244,114,182,0.40)' },
+    '.less': { fill: '#F472B6', glow: 'rgba(244,114,182,0.40)' },
+    '.html': { fill: '#FB923C', glow: 'rgba(251,146,60,0.40)' },
+    '.htm': { fill: '#FB923C', glow: 'rgba(251,146,60,0.40)' },
+    '.vue': { fill: '#34D399', glow: 'rgba(52,211,153,0.40)' },
+    '.svelte': { fill: '#FB923C', glow: 'rgba(251,146,60,0.40)' },
+    '.py': { fill: '#34D399', glow: 'rgba(52,211,153,0.40)' },
+    '.json': { fill: '#FACC15', glow: 'rgba(250,204,21,0.40)' },
+    '.yaml': { fill: '#FACC15', glow: 'rgba(250,204,21,0.40)' },
+    '.yml': { fill: '#FACC15', glow: 'rgba(250,204,21,0.40)' },
+    '.md': { fill: '#38BDF8', glow: 'rgba(56,189,248,0.40)' },
+    '.java': { fill: '#FACC15', glow: 'rgba(250,204,21,0.40)' },
+    '.kt': { fill: '#A78BFA', glow: 'rgba(167,139,250,0.40)' },
+    '.go': { fill: '#38BDF8', glow: 'rgba(56,189,248,0.40)' },
+    '.rs': { fill: '#FB923C', glow: 'rgba(251,146,60,0.40)' },
+    '.rb': { fill: '#EF4444', glow: 'rgba(239,68,68,0.40)' },
+    '.php': { fill: '#A78BFA', glow: 'rgba(167,139,250,0.40)' },
+    '.c': { fill: '#94A3B8', glow: 'rgba(148,163,184,0.35)' },
+    '.cpp': { fill: '#94A3B8', glow: 'rgba(148,163,184,0.35)' },
+    '.h': { fill: '#94A3B8', glow: 'rgba(148,163,184,0.35)' },
+    '.cs': { fill: '#A78BFA', glow: 'rgba(167,139,250,0.40)' },
 };
 
-const DEFAULT_EXT_COLOR = { fill: '#8b5cf6', glow: 'rgba(139,92,246,0.35)' };
+const DEFAULT_EXT_COLOR = { fill: '#94A3B8', glow: 'rgba(148,163,184,0.35)' };
 
 // Risk overlays — used for border ring
 const RISK_RING = {
-    low: 'rgba(16,185,129,0.5)',
-    medium: 'rgba(245,158,11,0.7)',
+    low: 'rgba(52,211,153,0.5)',
+    medium: 'rgba(250,204,21,0.7)',
     high: 'rgba(239,68,68,0.8)',
 };
 
-const SELECTED_COLOR = '#00f0ff';
-const EDGE_BASE = 'rgba(148, 163, 184, 0.12)';
-const EDGE_HIGHLIGHT = 'rgba(0, 240, 255, 0.6)';
-const EDGE_DEPENDENCY = 'rgba(59, 130, 246, 0.85)';  // Blue — outgoing (this file imports)
-const EDGE_DEPENDENT = 'rgba(168, 85, 247, 0.85)';   // Purple — incoming (imports this file)
+const SELECTED_COLOR = '#22D3EE';
+const EDGE_BASE = 'rgba(148, 163, 184, 0.18)';
+const EDGE_HIGHLIGHT = 'rgba(34, 211, 238, 0.6)';
+const EDGE_DEPENDENCY = 'rgba(56, 189, 248, 0.85)';  // Sky blue — outgoing (this file imports)
+const EDGE_DEPENDENT = 'rgba(139, 92, 246, 0.85)';   // Purple — incoming (imports this file)
 
 // Helper: lighten a hex colour for gradient centre
 function lighten(hex, amt = 60) {
@@ -67,7 +69,7 @@ function getExtColor(ext) {
     return EXT_COLORS[ext] || DEFAULT_EXT_COLOR;
 }
 
-// ── Particle Background (lightweight – 30 particles, static render) ──
+// ── Particle Background (Subtle glowing dots matching website) ──
 function ParticleCanvas() {
     const canvasRef = useRef(null);
 
@@ -79,7 +81,9 @@ function ParticleCanvas() {
         let w, h;
 
         const particles = [];
-        const COUNT = 30; // reduced from 60 for performance
+        const orbs = [];
+        const COUNT = 35; // Number of small dots
+        const ORB_COUNT = 4; // Number of large blurred background orbs
 
         function resize() {
             w = canvas.width = canvas.parentElement.clientWidth;
@@ -89,48 +93,97 @@ function ParticleCanvas() {
         function init() {
             resize();
             particles.length = 0;
+            orbs.length = 0;
+
+            // Large blurred background orbs
+            for (let i = 0; i < ORB_COUNT; i++) {
+                orbs.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: Math.random() * 80 + 40, // 40px to 120px radius
+                    dx: (Math.random() - 0.5) * 0.05,
+                    dy: (Math.random() - 0.5) * 0.05,
+                    color: i % 2 === 0 ? 'rgba(40, 36, 68, 0.4)' : 'rgba(28, 45, 66, 0.3)', // Deep muted purple/teal
+                });
+            }
+
+            // Small sharp dots
             for (let i = 0; i < COUNT; i++) {
+                // Mix of very tiny dots and slightly larger ones
+                const isTiny = Math.random() > 0.3;
                 particles.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: Math.random() * 1.5 + 0.5,
+                    r: isTiny ? Math.random() * 0.5 + 0.5 : Math.random() * 1.5 + 1.5,
                     dx: (Math.random() - 0.5) * 0.15,
                     dy: (Math.random() - 0.5) * 0.15,
-                    alpha: Math.random() * 0.3 + 0.08,
+                    alpha: isTiny ? Math.random() * 0.3 + 0.1 : Math.random() * 0.4 + 0.2,
+                    color: Math.random() > 0.5 ? '138, 173, 244' : '34, 211, 238' // Soft blue and Cyan
                 });
             }
         }
 
-        let lastTime = 0;
-        const FPS_INTERVAL = 1000 / 24; // cap at 24fps — enough for slow drift
-
-        function draw(timestamp) {
+        function draw() {
             animId = requestAnimationFrame(draw);
-            const elapsed = timestamp - lastTime;
-            if (elapsed < FPS_INTERVAL) return;
-            lastTime = timestamp - (elapsed % FPS_INTERVAL);
-
             ctx.clearRect(0, 0, w, h);
 
-            // Subtle radial spotlight
-            const grd = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.6);
-            grd.addColorStop(0, 'rgba(6,182,212,0.03)');
-            grd.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = grd;
-            ctx.fillRect(0, 0, w, h);
+            // 1. Draw large background orbs
+            for (const orb of orbs) {
+                orb.x += orb.dx;
+                orb.y += orb.dy;
 
+                if (orb.x < -200) orb.x = w + 200;
+                if (orb.x > w + 200) orb.x = -200;
+                if (orb.y < -200) orb.y = h + 200;
+                if (orb.y > h + 200) orb.y = -200;
+
+                ctx.beginPath();
+                ctx.arc(orb.x, orb.y, orb.r, 0, Math.PI * 2);
+                ctx.fillStyle = orb.color;
+                ctx.fill();
+            }
+
+            // 2. Draw faint connecting lines between nearby particles
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 120) {
+                        const alpha = (1 - dist / 120) * 0.15; // Opacity drops off with distance (max 0.15)
+                        ctx.strokeStyle = `rgba(138, 173, 244, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // 3. Draw small sharp dots
             for (const p of particles) {
                 p.x += p.dx;
                 p.y += p.dy;
-                if (p.x < 0) p.x = w;
-                if (p.x > w) p.x = 0;
-                if (p.y < 0) p.y = h;
-                if (p.y > h) p.y = 0;
+
+                if (p.x < -10) p.x = w + 10;
+                if (p.x > w + 10) p.x = -10;
+                if (p.y < -10) p.y = h + 10;
+                if (p.y > h + 10) p.y = -10;
 
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(148,163,184,${p.alpha})`;
+                ctx.fillStyle = `rgba(${p.color}, ${p.alpha})`;
+                // Only glow the slightly larger dots
+                if (p.r > 1.5) {
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = `rgba(${p.color}, ${p.alpha})`;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
                 ctx.fill();
+                ctx.shadowBlur = 0;
             }
         }
 
@@ -150,6 +203,7 @@ function ParticleCanvas() {
         <canvas
             ref={canvasRef}
             className="particle-canvas"
+            style={{ position: 'absolute', top: 0, left: 0, zIndex: 0, pointerEvents: 'none', opacity: 0.8 }}
         />
     );
 }
@@ -157,11 +211,11 @@ function ParticleCanvas() {
 // ── Tooltip Component ────────────────────────────────────────────────
 function GraphTooltip({ data, position }) {
     if (!data) return null;
-    const riskColors = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };
+    const riskColors = { low: '#34D399', medium: '#FACC15', high: '#EF4444' };
     const riskGradients = {
-        low: 'linear-gradient(90deg, #3b82f6, #10b981)',
-        medium: 'linear-gradient(90deg, #10b981, #f59e0b)',
-        high: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+        low: 'linear-gradient(90deg, #38BDF8, #34D399)',
+        medium: 'linear-gradient(90deg, #34D399, #FACC15)',
+        high: 'linear-gradient(90deg, #FACC15, #EF4444)',
     };
     return (
         <div
@@ -220,19 +274,19 @@ function GraphTooltip({ data, position }) {
 
 // ── Legend (file-type colors) ─────────────────────────────────────
 const LEGEND_ITEMS = [
-    { label: 'JSX / TSX', color: '#06b6d4' },
-    { label: 'JS / MJS', color: '#3b82f6' },
-    { label: 'TS', color: '#6366f1' },
-    { label: 'CSS/SCSS', color: '#ec4899' },
-    { label: 'HTML', color: '#f97316' },
-    { label: 'Python', color: '#10b981' },
-    { label: 'JSON/Java', color: '#f59e0b' },
-    { label: 'Other', color: '#8b5cf6' },
+    { label: 'JSX / TSX', color: '#60A5FA' },
+    { label: 'JS / MJS', color: '#38BDF8' },
+    { label: 'TS', color: '#A78BFA' },
+    { label: 'CSS/SCSS', color: '#F472B6' },
+    { label: 'HTML', color: '#FB923C' },
+    { label: 'Python', color: '#34D399' },
+    { label: 'JSON/Java', color: '#FACC15' },
+    { label: 'Other', color: '#94A3B8' },
 ];
 
 const RISK_LEGEND = [
-    { label: 'Low Risk', color: 'rgba(16,185,129,0.7)' },
-    { label: 'Medium Risk', color: 'rgba(245,158,11,0.7)' },
+    { label: 'Low Risk', color: 'rgba(52,211,153,0.7)' },
+    { label: 'Medium Risk', color: 'rgba(250,204,21,0.7)' },
     { label: 'High Risk', color: 'rgba(239,68,68,0.8)' },
 ];
 
@@ -394,22 +448,16 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         'width': 'data(size)',
                         'height': 'data(size)',
                         'background-color': 'data(color)',
-                        'background-opacity': 0.92,
-                        // Gradient fill for orb effect
-                        'background-fill': 'radial-gradient',
-                        'background-gradient-stop-colors': function (ele) {
-                            return `${ele.data('colorLight')} ${ele.data('color')} ${ele.data('color')}`;
-                        },
-                        'background-gradient-stop-positions': '0% 55% 100%',
+                        'background-opacity': 0.9,
 
                         // Border ring (risk-based)
-                        'border-width': 2.5,
+                        'border-width': 4.5,
                         'border-color': 'data(riskRing)',
-                        'border-opacity': 0.7,
+                        'border-opacity': 0.9,
 
-                        // Labels — always white on dark bg for readability
+                        // Labels
                         'label': 'data(label)',
-                        'color': '#f1f5f9',
+                        'color': '#E5E7EB',
                         'font-size': '10px',
                         'font-family': 'Inter, sans-serif',
                         'font-weight': '500',
@@ -418,7 +466,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         'text-margin-y': 8,
                         'text-max-width': '90px',
                         'text-wrap': 'ellipsis',
-                        'text-background-color': '#0a0f1e',
+                        'text-background-color': '#0B0F1A',
                         'text-background-opacity': 0.85,
                         'text-background-padding': '3px',
                         'text-background-shape': 'roundrectangle',
@@ -426,7 +474,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         // Glow
                         'shadow-blur': 12,
                         'shadow-color': 'data(glowColor)',
-                        'shadow-opacity': 0.3,
+                        'shadow-opacity': 0.4,
                         'shadow-offset-x': 0,
                         'shadow-offset-y': 0,
                         'overlay-opacity': 0,
@@ -436,19 +484,18 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         'transition-duration': '0.15s',
                     },
                 },
-                // Selected node — keep text white and readable
+                // Selected node
                 {
                     selector: 'node:selected',
                     style: {
-                        'border-color': SELECTED_COLOR,
-                        'border-width': 3.5,
+                        'border-width': 5.5,
                         'border-opacity': 1,
                         'shadow-blur': 25,
-                        'shadow-color': 'rgba(0,240,255,0.5)',
-                        'shadow-opacity': 0.6,
+                        'shadow-opacity': 0.8,
+                        'background-opacity': 1,
                         'color': '#ffffff',
                         'font-weight': '700',
-                        'text-background-color': 'rgba(0,50,60,0.9)',
+                        'text-background-color': 'rgba(11,15,26,0.9)',
                         'text-background-opacity': 1,
                     },
                 },
@@ -456,11 +503,10 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node.click-neighbor',
                     style: {
-                        'border-color': SELECTED_COLOR,
-                        'border-width': 3,
-                        'border-opacity': 0.8,
+                        'border-width': 4.5,
+                        'border-opacity': 0.9,
                         'shadow-blur': 20,
-                        'shadow-opacity': 0.5,
+                        'shadow-opacity': 0.6,
                     },
                 },
                 // Click-toggled: dimmed non-connected nodes
@@ -473,11 +519,9 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node.highlighted',
                     style: {
-                        'border-color': '#a855f7',
-                        'border-width': 3,
+                        'border-width': 4.5,
                         'border-opacity': 1,
-                        'shadow-color': 'rgba(168,85,247,0.5)',
-                        'shadow-opacity': 0.6,
+                        'shadow-opacity': 0.7,
                         'shadow-blur': 20,
                     },
                 },
@@ -490,8 +534,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node.high-risk-pulse',
                     style: {
-                        'border-width': 3.5,
-                        'border-color': '#ef4444',
+                        'border-width': 5.5,
+                        'border-color': '#EF4444',
                         'border-opacity': 1,
                     },
                 },
@@ -547,10 +591,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                     style: {
                         'line-color': EDGE_HIGHLIGHT,
                         'target-arrow-color': EDGE_HIGHLIGHT,
-                        'width': 2.2,
-                        'opacity': 1,
-                        'line-style': 'dashed',
-                        'line-dash-pattern': [8, 4],
+                        'width': 1.8,
+                        'opacity': 0.9,
                     },
                 },
                 {
@@ -570,7 +612,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                     selector: 'node.search-match',
                     style: {
                         'border-width': 3,
-                        'border-color': '#00f0ff',
+                        'border-color': '#22D3EE',
                         'border-opacity': 0.9,
                     },
                 },
@@ -881,7 +923,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
 
     return (
         <div className="relative w-full h-full">
-            {/* Particle background */}
+            {/* Background Particles matching website */}
             <ParticleCanvas />
 
             {/* Search bar */}

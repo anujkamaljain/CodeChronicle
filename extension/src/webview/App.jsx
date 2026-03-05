@@ -13,10 +13,10 @@ import DetailedSummaryModal from './components/DetailedSummaryModal';
 import RelationshipModal from './components/RelationshipModal';
 
 const TABS = [
-    { id: 'graph', label: 'Graph', icon: '◉' },
-    { id: 'blast', label: 'Blast Radius', icon: '◎' },
-    { id: 'query', label: 'AI Query', icon: '⬡' },
-    { id: 'risk', label: 'Risk Map', icon: '△' },
+    { id: 'graph', label: 'Graph', icon: '?', tooltip: 'View dependency structure and file relationships' },
+    { id: 'blast', label: 'Blast Radius', icon: '?', tooltip: 'Analyze impact of changes to a specific file' },
+    { id: 'query', label: 'AI Query', icon: '?', tooltip: 'Ask natural language questions about the codebase' },
+    { id: 'risk', label: 'Risk Map', icon: '?', tooltip: 'Identify high-risk and complex files' },
 ];
 
 const AI_STAGES = [
@@ -117,7 +117,8 @@ export default function App({ vscode }) {
                     }
                     break;
 
-                case 'risk':
+                case 'risk': {
+                    const store = useStore.getState();
                     if (message.isAiRisk) {
                         setNodeAiRisk(message.risk);
                         setLoadingRisk(false);
@@ -126,7 +127,21 @@ export default function App({ vscode }) {
                     } else {
                         setNodeLocalRisk(message.risk);
                     }
+
+                    // Update the graph data so the node border color reflects the new risk
+                    if (store.graph && store.graph.nodes[message.nodeId]) {
+                        const newGraph = { ...store.graph, nodes: { ...store.graph.nodes } };
+                        const updatedNode = { ...newGraph.nodes[message.nodeId] };
+                        if (message.isAiRisk) {
+                            updatedNode.riskFactor = message.risk;
+                        } else {
+                            updatedNode.localRisk = message.risk;
+                        }
+                        newGraph.nodes[message.nodeId] = updatedNode;
+                        store.setGraph(newGraph);
+                    }
                     break;
+                }
 
                 case 'highlight':
                     setHighlightedNodes(message.nodeIds || []);
@@ -252,7 +267,7 @@ export default function App({ vscode }) {
 
     return (
         <div className="h-screen w-screen flex flex-col bg-grid overflow-hidden"
-            style={{ background: 'linear-gradient(180deg, #050a14 0%, #0a1122 50%, #050a14 100%)' }}>
+            style={{ background: 'var(--bg-primary)' }}>
 
             {/* Top toolbar */}
             <Toolbar onRefresh={handleRefresh} />
@@ -261,14 +276,24 @@ export default function App({ vscode }) {
             <div className="flex items-center border-b"
                 style={{ borderColor: 'var(--border-glass)' }}>
                 {TABS.map((tab) => (
-                    <button
+                    <div
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`tab-button flex items-center gap-2 ${activeTab === tab.id ? 'active' : ''}`}
+                        className="relative flex items-center group cursor-pointer"
                     >
-                        <span className="text-xs opacity-70">{tab.icon}</span>
-                        {tab.label}
-                    </button>
+                        <button
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+                        >
+                            {tab.label}
+                        </button>
+                        <div
+                            className="ml-1 w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] opacity-40 hover:opacity-100 transition-opacity"
+                            title={tab.tooltip}
+                            style={{ color: activeTab === tab.id ? 'var(--neon-cyan)' : 'var(--text-muted)' }}
+                        >
+                            {tab.icon}
+                        </div>
+                    </div>
                 ))}
 
                 {/* Node count badge */}
