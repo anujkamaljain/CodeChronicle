@@ -227,7 +227,7 @@ The **WorkspaceScanner** is the first step in the analysis pipeline. It discover
 
 **How it works:**
 1. Recursively traverses the workspace directory tree
-2. Filters files by the configured `supportedExtensions` list (35+ extensions by default)
+2. Filters files by the configured `supportedExtensions` list (37 extensions by default)
 3. Excludes directories matching `excludePatterns` (e.g., `node_modules`, `dist`, `.git`, `vendor`, `__pycache__`, `build`, `target`, `.next`, `coverage`)
 4. Respects `.gitignore` patterns using the `ignore` npm package
 5. Records workspace-relative paths for each discovered file
@@ -246,20 +246,20 @@ The **DependencyParser** extracts import/require/include statements from source 
 
 | Language | Detected Patterns |
 |----------|-------------------|
-| **JavaScript / TypeScript** | `import ... from '...'`, `require('...')`, dynamic `import('...')`, side-effect `import '...'` |
+| **JavaScript / TypeScript** | `import ... from '...'`, `require('...')`, dynamic `import('...')`, side-effect `import '...'`, `export ... from '...'` |
 | **Python** | `import module`, `from module import ...` |
 | **Java** | `import package.Class;` |
 | **C / C++** | `#include "header.h"`, `#include <system>` |
 | **C#** | `using Namespace;` |
 | **Go** | `import "package"`, `import (...)` |
-| **Ruby** | `require 'file'`, `require_relative 'file'` |
+| **Ruby** | `require 'file'`, `require_relative 'file'`, `load 'file'` |
 | **PHP** | `use Namespace`, `require 'file'`, `include 'file'` |
 | **Rust** | `use crate::module`, `mod module`, `extern crate` |
 | **Swift** | `import Module` |
 | **Kotlin / Scala** | `import package.Class` |
 | **Dart** | `import 'package:...'`, `export '...'`, `part '...'` |
 | **CSS / SCSS / LESS** | `@import '...'`, `@use '...'`, `@forward '...'` |
-| **HTML** | `<script src="...">`, `<link href="...">` |
+| **HTML** | `<script src="...">`, `<link href="...">`, `<img src="...">` |
 
 **Resolution rules:**
 - Relative imports (e.g., `./utils`, `../models/user`) are resolved to absolute workspace paths
@@ -290,7 +290,7 @@ The **MetricsEngine** computes deterministic structural metrics for every node:
 | **Dependent Count** | Number of files that import this file (incoming edges) | Graph in-degree |
 | **Centrality Score** | Betweenness centrality — how critical this file is as a connector | Graph algorithm (0.0–1.0) |
 | **Structural Risk Score** | Composite risk from dependency count, dependents, centrality, LOC | Weighted formula (0–100) |
-| **Structural Risk Level** | Categorized risk | `low` (0–33), `medium` (34–66), `high` (67–100) |
+| **Structural Risk Level** | Categorized risk | `low` (0–29), `medium` (30–59), `high` (60–100) |
 
 ---
 
@@ -303,7 +303,7 @@ The **GraphDashboard** renders the dependency graph using **Cytoscape.js** with 
 | Visual Property | Maps To |
 |----------------|---------|
 | **Node size** (24–70px) | Centrality score + dependent count |
-| **Node color** | File extension (JSX=cyan, TS=blue, Python=green, CSS=pink, etc.) |
+| **Node color** | File extension (JSX/TSX=cyan, JS=blue, TS=indigo, Python=green, CSS=pink, etc.) |
 | **Border ring color** | Risk level: green (low), yellow (medium), red (high) |
 | **Border animation** | High-risk nodes have a pulsing border effect |
 | **Edge color (on select)** | Blue = dependency (outgoing), Purple = dependent (incoming) |
@@ -313,7 +313,7 @@ The **GraphDashboard** renders the dependency graph using **Cytoscape.js** with 
 - **Hover a node**: Tooltip showing LOC, dependencies, dependents, centrality, risk level
 - **Click empty space**: Deselect and reset the view
 - **Pan / Zoom**: Mouse drag and scroll wheel
-- **Double-tap**: Fit the graph to the viewport
+- **Double-click**: Fit the graph to the viewport
 
 **Layout intelligence:** The layout algorithm adapts its parameters based on graph size:
 - Small graphs (< 50 nodes): compact spacing
@@ -359,10 +359,10 @@ When a user clicks a node in the graph, the extension requests an AI-generated s
 
 **Flow:**
 1. User clicks a node → extension receives `nodeClick` message
-2. Extension checks DynamoDB cache via `GET /cache/{fileHash}?filePath=...`
-3. **Cache hit**: Returns cached summary immediately (shown with a "Cached" badge)
-4. **Cache miss**: Sends file content + metrics + dependency context to `POST /ai/explain`
-5. Lambda constructs a Bedrock prompt asking for a 2-3 sentence summary covering:
+2. Extension sends structural data immediately, then calls `POST /ai/explain` with file content, hash, metrics, and dependency context
+3. Lambda checks DynamoDB cache using the file hash + path as the key
+4. **Cache hit**: Returns cached summary immediately (shown with a "Cached" badge in the UI)
+5. **Cache miss**: Lambda constructs a Bedrock prompt asking for a 2-3 sentence summary covering:
    - What the file does
    - Why it exists in the codebase
    - Its role in the overall architecture
@@ -447,16 +447,18 @@ Blast radius answers the question: *"If I change this file, what else could brea
 
 The **QueryPanel** lets developers ask questions about their codebase in plain English.
 
-**Example queries:**
-- "Where is authentication handled?"
-- "Which files are most critical to the application?"
-- "How does the database connection work?"
-- "What would break if I modified the user model?"
+**Example queries (built-in suggestions):**
+- "Which files handle authentication?"
+- "What are the most critical files in this codebase?"
+- "Show me files with database connections"
+- "Which files have the most dependencies?"
+- "What does the main entry point do?"
+- "Find files related to API endpoints"
 
 **How it works:**
 1. User types a question and submits
 2. Extension runs `rankFilesByRelevance` — scores files by keyword overlap between the query and file paths, labels, directory names, and existing summaries
-3. Top 7 most relevant files (with their metrics and summaries) are sent as context
+3. Top 10 most relevant files are sent as context (with file content included for the top 7)
 4. `POST /ai/query` sends the query + graph context to Lambda
 5. Lambda constructs a Bedrock prompt with the codebase context
 6. Model returns a structured JSON response:
@@ -476,12 +478,12 @@ The **QueryPanel** lets developers ask questions about their codebase in plain E
 
 **UI features:**
 - Markdown rendering of answers (headings, lists, code blocks, bold, inline code)
-- Confidence badge (color-coded: green ≥ 0.8, yellow ≥ 0.5, red < 0.5)
+- Confidence badge (color-coded: green when > 70%, yellow otherwise)
 - Response time display
 - Copy answer to clipboard
 - Clickable file references that open files in the editor
 - Suggested follow-up questions (clickable)
-- Recent query history (up to 10 queries)
+- Recent query history (up to 50 queries)
 - Example queries for quick start
 
 ---
@@ -528,11 +530,12 @@ CodeChronicle uses a two-tier caching strategy:
 - **Purpose:** Avoid redundant Bedrock API calls for unchanged files
 
 **Cache lookup flow:**
-1. Extension computes a content hash of the file
-2. Calls `GET /cache/{hash}?filePath=...`
-3. Lambda looks up both Summaries and Risks tables
-4. Returns `{ summary, risk, cached: true }` or `{ cached: false }`
-5. On miss, generates via Bedrock and calls `POST /cache` to store
+1. Extension computes a content MD5 hash of the file
+2. Sends the hash + file data to `POST /ai/explain` or `POST /ai/risk-score`
+3. Lambda handler checks DynamoDB for a matching `fileHash + filePath` key
+4. **Cache hit**: Returns cached result immediately (response includes `cached: true`)
+5. **Cache miss**: Calls Bedrock, then stores the result in DynamoDB with a 7-day TTL
+6. Standalone `GET /cache/{hash}` and `POST /cache` endpoints also exist for direct cache access
 
 ---
 
@@ -583,7 +586,7 @@ The extension adds a **status bar item** to the VS Code bottom bar.
 **Additional info displayed in the webview status bar:**
 - Node and edge counts (e.g., "142 nodes · 387 edges")
 - Last updated timestamp
-- Cloud status: Connected / Rate Limited / Offline
+- Cloud status: Connected / Disconnected (UI also supports Rate Limited display)
 
 ---
 
@@ -645,7 +648,7 @@ User Action (click node / ask question / analyze risk)
 
 | Attribute | Type | Key | Description |
 |-----------|------|-----|-------------|
-| `fileHash` | String | Partition Key | SHA hash of file content |
+| `fileHash` | String | Partition Key | MD5 hash of file content |
 | `filePath` | String | Sort Key | Workspace-relative file path |
 | `summary` | String | — | AI-generated file summary |
 | `timestamp` | String | — | ISO 8601 timestamp of generation |
@@ -655,7 +658,7 @@ User Action (click node / ask question / analyze risk)
 
 | Attribute | Type | Key | Description |
 |-----------|------|-----|-------------|
-| `fileHash` | String | Partition Key | SHA hash of file content |
+| `fileHash` | String | Partition Key | MD5 hash of file content |
 | `filePath` | String | Sort Key | Workspace-relative file path |
 | `riskFactor` | Map | — | `{ level, score, explanation, factors }` |
 | `timestamp` | String | — | ISO 8601 timestamp of generation |
@@ -670,20 +673,26 @@ User Action (click node / ask question / analyze risk)
 Sent to Bedrock when a user clicks a node:
 
 ```
-You are a senior software architect analyzing a codebase.
+You are analyzing a source code file in a large codebase.
 
 File: {filePath}
-Metrics: LOC={linesOfCode}, Dependencies={dependencyCount}, Dependents={dependentCount}
-Dependencies: {importedFiles}
-Dependents: {dependentFiles}
+Lines of Code: {linesOfCode}
+Dependencies: {dependencyCount}
+Dependents: {dependentCount}
+Centrality Score: {centralityScore}
 
-File Content (up to ~80k characters):
-{fileContent}
+File Content:
+{fileContent (up to ~80k characters)}
 
-Generate a concise 2-3 sentence summary explaining:
+This file imports: {dependencies}
+This file is imported by: {dependents}
+
+Generate a concise summary (2-3 sentences) explaining:
 1. What this file does
 2. Why it exists in the codebase
 3. Its role in the overall architecture
+
+Return only the summary text, no additional formatting.
 ```
 
 ### Risk Assessment Prompt
@@ -691,13 +700,27 @@ Generate a concise 2-3 sentence summary explaining:
 Sent to Bedrock when a user clicks "Analyze Risk":
 
 ```
-Analyze this file for semantic risk factors:
+You are assessing the risk of modifying a source code file.
+
+File: {filePath}
+Structural Metrics:
+- Lines of Code: {linesOfCode}
+- Number of Dependencies: {dependencyCount}
+- Number of Dependents: {dependentCount}
+- Centrality Score: {centralityScore}
+
+File Content:
+{fileContent (up to ~4k characters)}
+
+Analyze this file for semantic risk factors including:
 - Business-critical logic
 - Side effects (database writes, API calls, file I/O)
 - Security-sensitive operations (authentication, authorization, encryption)
 - Hidden coupling (global state, singletons, event emitters)
+- Complex control flow or error handling
 
-Return JSON: { "level": "low|medium|high", "score": 0-100, "explanation": "...", "factors": [...] }
+Return a JSON object with:
+{ "level": "low|medium|high", "score": 0-100, "explanation": "...", "factors": [...] }
 ```
 
 ### Query Prompt
@@ -705,18 +728,27 @@ Return JSON: { "level": "low|medium|high", "score": 0-100, "explanation": "...",
 Sent to Bedrock for natural language questions:
 
 ```
-You are answering questions about a codebase.
+You are a precise code analysis assistant. Answer questions about a codebase
+using ONLY the source code and metadata provided below.
 
-Query: {userQuery}
-Total Files: {totalFiles}
+User Query: {query}
+Total Files in Codebase: {totalFiles}
+Files Provided Below: {count} (ranked by relevance)
 
-Relevant Files (top 7 ranked by relevance):
-{relevantFiles with paths, metrics, summaries}
+Relevant Files:
+{For each file: path, summary, metrics, and source code content}
 
-Return JSON: { "answer": "...", "references": [...], "suggestedQuestions": [...], "confidence": 0.0-1.0 }
+RULES:
+1. Base your answer STRICTLY on the code and metadata provided.
+2. Reference specific file paths, function/class/variable names, and logic you can see.
+3. If the provided files don't contain enough information, explicitly state what's missing.
+4. Do NOT invent line numbers. Reference by function/class name instead.
+
+Return JSON:
+{ "answer": "...", "references": [...], "suggestedQuestions": [...], "confidence": 0.0-1.0 }
 ```
 
-**Model:** Amazon Nova Premier (`us.amazon.nova-premier-v1:0`) with fallback to Nova Lite (`us.amazon.nova-lite-v1:0`)
+**Model:** The model is configured via the `BEDROCK_MODEL_ID` environment variable in `serverless.yml`. Default is Amazon Nova Premier (`us.amazon.nova-premier-v1:0`). The Lambda handler code falls back to Nova Lite (`us.amazon.nova-lite-v1:0`) if the environment variable is not set.
 
 ---
 
@@ -743,7 +775,7 @@ Return JSON: { "answer": "...", "references": [...], "suggestedQuestions": [...]
 | `risk` | `{ nodeId, risk, isAiRisk, cached }` | Risk assessment result |
 | `highlight` | `{ nodeIds, blastRadius }` | Blast radius highlight set |
 | `queryResult` | `{ result }` | AI query response |
-| `cloudStatus` | `{ status }` | Cloud connectivity state: `connected`, `rate-limited`, `offline` |
+| `cloudStatus` | `{ status }` | Cloud connectivity state: `connected` or `disconnected` (UI also supports `rate-limited` display) |
 | `error` | `{ message }` | Error notification |
 
 ---
@@ -756,7 +788,7 @@ Return JSON: { "answer": "...", "references": [...], "suggestedQuestions": [...]
 | **Open Graph View** | `codechronicle.showGraph` | Opens the main interactive dependency graph in a webview panel |
 | **Ask AI About Codebase** | `codechronicle.askAI` | Opens an input box for natural language questions (routes through graph panel if open) |
 | **Predict Blast Radius** | `codechronicle.predictBlastRadius` | Computes and visualizes the blast radius for the currently active editor file |
-| **Refresh Analysis** | `codechronicle.refreshAnalysis` | Clears the local cache and performs a full rescan and rebuild |
+| **Refresh Analysis** | `codechronicle.refreshAnalysis` | Triggers a full workspace rescan and graph rebuild |
 
 **Context menu:** Right-click any file or folder in the Explorer → "CodeChronicle: Open Graph View"
 
@@ -773,10 +805,10 @@ All settings are under the `codechronicle` namespace in VS Code settings.
 | `codechronicle.awsRegion` | `string` | `"us-east-1"` | AWS region for cloud services |
 | `codechronicle.enableCloudAI` | `boolean` | `true` | Enable cloud AI features (summaries, risk, Q&A). Set to `false` for fully offline local-only mode |
 | `codechronicle.maxFiles` | `number` | `10000` | Maximum number of files to analyze |
-| `codechronicle.supportedExtensions` | `string[]` | 35 extensions (see below) | File extensions to include in the analysis |
+| `codechronicle.supportedExtensions` | `string[]` | 37 extensions (see below) | File extensions to include in the analysis |
 
 <details>
-<summary><strong>Default Supported Extensions (35)</strong></summary>
+<summary><strong>Default Supported Extensions (37)</strong></summary>
 
 `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.py`, `.pyw`, `.java`, `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.cs`, `.go`, `.rb`, `.php`, `.rs`, `.swift`, `.kt`, `.kts`, `.scala`, `.r`, `.R`, `.lua`, `.dart`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, `.html`, `.htm`
 
@@ -788,26 +820,26 @@ All settings are under the `codechronicle` namespace in VS Code settings.
 
 | Language | Extensions | Import Detection Patterns |
 |----------|-----------|--------------------------|
-| **JavaScript** | `.js`, `.jsx`, `.mjs`, `.cjs` | `import ... from '...'`, `require('...')`, dynamic `import('...')` |
+| **JavaScript** | `.js`, `.jsx`, `.mjs`, `.cjs` | `import ... from '...'`, `require('...')`, dynamic `import('...')`, `export ... from '...'` |
 | **TypeScript** | `.ts`, `.tsx` | Same as JavaScript |
 | **Python** | `.py`, `.pyw` | `import module`, `from module import ...` |
 | **Java** | `.java` | `import package.Class;` |
 | **C / C++** | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx` | `#include "..."`, `#include <...>` |
 | **C#** | `.cs` | `using Namespace;` |
 | **Go** | `.go` | `import "package"`, `import (...)` |
-| **Ruby** | `.rb` | `require '...'`, `require_relative '...'` |
+| **Ruby** | `.rb` | `require '...'`, `require_relative '...'`, `load '...'` |
 | **PHP** | `.php` | `use Namespace`, `require`, `include` |
 | **Rust** | `.rs` | `use crate::...`, `mod ...`, `extern crate` |
 | **Swift** | `.swift` | `import Module` |
 | **Kotlin** | `.kt`, `.kts` | `import package.Class` |
 | **Scala** | `.scala` | `import package.Class` |
-| **R** | `.r`, `.R` | Language-level imports |
-| **Lua** | `.lua` | `require('...')` |
+| **R** | `.r`, `.R` | `library()`, `require()`, `source()` |
+| **Lua** | `.lua` | `require('...')`, `dofile('...')` |
 | **Dart** | `.dart` | `import '...'`, `export '...'`, `part '...'` |
 | **Vue** | `.vue` | `import` statements in `<script>` |
 | **Svelte** | `.svelte` | `import` statements in `<script>` |
 | **CSS / SCSS / SASS / LESS** | `.css`, `.scss`, `.sass`, `.less` | `@import`, `@use`, `@forward` |
-| **HTML** | `.html`, `.htm` | `<script src="...">`, `<link href="...">` |
+| **HTML** | `.html`, `.htm` | `<script src="...">`, `<link href="...">`, `<img src="...">` |
 
 ---
 
@@ -1095,7 +1127,7 @@ This produces a `.vsix` file that can be:
 | **Content-addressable cache** | DynamoDB keys are content hashes, preventing stale data serving |
 | **TTL expiration** | Cached data automatically expires after 7 days |
 | **CORS enabled** | API Gateway has CORS configured for webview access |
-| **Production obfuscation** | Webpack production build minifies and obfuscates extension code |
+| **Production minification** | Webpack production build minifies extension and webview code |
 
 ---
 
@@ -1107,12 +1139,12 @@ CodeChronicle is designed to degrade gracefully when cloud services are unavaila
 |----------|----------|
 | **Cloud AI disabled** | All local features work normally (graph, metrics, blast radius, structural risk). AI summaries fall back to heuristic descriptions |
 | **API Gateway unreachable** | Extension detects and shows "Offline" cloud status. Local features remain available |
-| **Bedrock rate limited** | Lambda retries with backoff. Extension shows cached results if available, or "Rate Limited" status |
+| **Bedrock rate limited** | Extension API client retries with exponential backoff (up to 2 retries). Shows cached results if available, or falls back to structural data |
 | **Lambda timeout** | 60-second timeout for AI functions. Extension shows error toast and falls back to structural data |
 | **DynamoDB throttled** | On-demand billing minimizes this. Lambda uses try/catch and continues without caching |
 | **File parse error** | Logs the error, skips the file, continues processing all remaining files |
 | **Invalid AI response** | Lambda validates and normalizes responses (clamps scores, sets default levels). Falls back to structural metrics |
-| **Network loss** | Extension continues with deterministic features; queues no cloud requests until connectivity restored |
+| **Network loss** | Extension continues with deterministic features. Circuit-breaker opens after 2 consecutive failures and auto-resets after 5 minutes |
 
 ---
 
@@ -1128,7 +1160,7 @@ CodeChronicle uses a **dark glassmorphism design system** with neon accents, bui
 | `--neon-purple` | `#a78bfa` | Secondary accent, dependent edges |
 | `--neon-pink` | `#f472b6` | Tertiary accent, CSS file nodes |
 | `--neon-green` | `#4ade80` | Success states, low risk |
-| `--neon-blue` | `#60a5fa` | Info states, TypeScript nodes |
+| `--neon-blue` | `#60a5fa` | Info states, JS file nodes |
 | `--risk-low` | Green | Low risk badge/border |
 | `--risk-medium` | Yellow/Amber | Medium risk badge/border |
 | `--risk-high` | Red | High risk badge/border |
