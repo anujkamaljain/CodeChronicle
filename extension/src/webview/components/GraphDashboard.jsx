@@ -403,7 +403,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                         'background-gradient-stop-positions': '0% 55% 100%',
 
                         // Border ring (risk-based)
-                        'border-width': 2.5,
+                        // Slightly thicker to make risk colour more readable
+                        'border-width': 5.5,
                         'border-color': 'data(riskRing)',
                         'border-opacity': 0.7,
 
@@ -440,9 +441,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node:selected',
                     style: {
-                        'border-color': SELECTED_COLOR,
+                        // Keep risk ring color; just make it a bit bolder and glow
                         'border-width': 3.5,
-                        'border-opacity': 1,
                         'shadow-blur': 25,
                         'shadow-color': 'rgba(0,240,255,0.5)',
                         'shadow-opacity': 0.6,
@@ -456,9 +456,8 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node.click-neighbor',
                     style: {
-                        'border-color': SELECTED_COLOR,
+                        // Keep risk ring color; only increase glow slightly
                         'border-width': 3,
-                        'border-opacity': 0.8,
                         'shadow-blur': 20,
                         'shadow-opacity': 0.5,
                     },
@@ -473,12 +472,12 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, onEd
                 {
                     selector: 'node.highlighted',
                     style: {
-                        'border-color': '#a855f7',
-                        'border-width': 3,
-                        'border-opacity': 1,
-                        'shadow-color': 'rgba(168,85,247,0.5)',
-                        'shadow-opacity': 0.6,
-                        'shadow-blur': 20,
+                        // Keep the original risk ring (red / yellow / green)
+                        // and only boost the glow so highlighted nodes stand out
+                        'shadow-color': 'rgba(168,85,247,0.75)',
+                        'shadow-opacity': 0.9,
+                        'shadow-blur': 26,
+                        'opacity': 1,
                     },
                 },
                 {

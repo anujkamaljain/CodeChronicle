@@ -196,6 +196,53 @@
     box-shadow: 0 0 10px var(--neon-cyan);
   }
 
+  /* Tab help icon + tooltip */
+  .tab-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    font-size: 0.6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    color: var(--text-muted);
+    cursor: default;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+
+  .tab-help:hover {
+    color: var(--neon-cyan);
+    border-color: rgba(0, 240, 255, 0.8);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  }
+
+  .tab-help-tooltip {
+    position: absolute;
+    left: 50%;
+    top: 120%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(10, 17, 34, 0.98);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.675rem;
+    color: var(--text-secondary);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 240, 255, 0.12);
+    transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+  }
+
+  .tab-help:hover .tab-help-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(2px);
+  }
+
   /* Risk badge */
   .risk-badge {
     display: inline-flex;

@@ -13,10 +13,30 @@ import DetailedSummaryModal from './components/DetailedSummaryModal';
 import RelationshipModal from './components/RelationshipModal';
 
 const TABS = [
-    { id: 'graph', label: 'Graph', icon: '◉' },
-    { id: 'blast', label: 'Blast Radius', icon: '◎' },
-    { id: 'query', label: 'AI Query', icon: '⬡' },
-    { id: 'risk', label: 'Risk Map', icon: '△' },
+    {
+        id: 'graph',
+        label: 'Graph',
+        icon: '◉',
+        tooltip: 'Visual dependency graph of your codebase',
+    },
+    {
+        id: 'blast',
+        label: 'Blast Radius',
+        icon: '◎',
+        tooltip: 'See which files are impacted if this file changes',
+    },
+    {
+        id: 'query',
+        label: 'AI Query',
+        icon: '⬡',
+        tooltip: 'Ask AI questions about your codebase with graph context',
+    },
+    {
+        id: 'risk',
+        label: 'Risk Map',
+        icon: '△',
+        tooltip: 'Explore structural and AI-estimated risk across files',
+    },
 ];
 
 const AI_STAGES = [
@@ -267,7 +287,15 @@ export default function App({ vscode }) {
                         className={`tab-button flex items-center gap-2 ${activeTab === tab.id ? 'active' : ''}`}
                     >
                         <span className="text-xs opacity-70">{tab.icon}</span>
-                        {tab.label}
+                        <span className="flex items-center gap-1">
+                            {tab.label}
+                            <span className="tab-help" aria-label={tab.tooltip}>
+                                ?
+                                <span className="tab-help-tooltip">
+                                    {tab.tooltip}
+                                </span>
+                            </span>
+                        </span>
                     </button>
                 ))}
 
