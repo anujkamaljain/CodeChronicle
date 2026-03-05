@@ -1,10 +1,11 @@
 <p align="center">
+  <img src="extension/assets/icon.png" alt="CodeChronicle Logo" width="120" />
   <h1 align="center">CodeChronicle ⚡</h1>
   <p align="center"><strong>AI-Powered VS Code Extension for Codebase Understanding, Interactive Dependency Graphs, Blast Radius Prediction, and Natural Language Exploration</strong></p>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/VS%20Code-Extension-blue?logo=visual-studio-code&style=for-the-badge" alt="VS Code Extension" />
+  <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visual-studio-code&style=for-the-badge" alt="VS Code Marketplace" /></a>
   <img src="https://img.shields.io/badge/JavaScript-ES2023-F7DF1E?logo=javascript&style=for-the-badge" alt="JavaScript" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&style=for-the-badge" alt="React" />
   <img src="https://img.shields.io/badge/AWS-Bedrock%20|%20Lambda%20|%20DynamoDB-FF9900?logo=amazon-aws&style=for-the-badge" alt="AWS" />
@@ -894,9 +895,16 @@ CodeChronicle/
 │
 ├── extension/                         # VS Code Extension
 │   ├── package.json                   # Extension manifest, commands, configuration
+│   ├── README.md                      # Marketplace extension page
+│   ├── CHANGELOG.md                   # Version history and release notes
+│   ├── LICENSE                        # MIT License
+│   ├── .vscodeignore                  # Files excluded from VSIX package
 │   ├── webpack.config.js              # Dual-target webpack (extension + webview)
 │   ├── tailwind.config.js             # Tailwind CSS configuration
 │   ├── postcss.config.js              # PostCSS pipeline
+│   │
+│   ├── assets/
+│   │   └── icon.png                   # Extension icon (marketplace + toolbar)
 │   │
 │   └── src/
 │       ├── extension.js               # Main entry: activation, commands, lifecycle
@@ -951,41 +959,38 @@ CodeChronicle/
 
 ## Quick Start
 
-### Prerequisites
+### Install from VS Code Marketplace
+
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for **"CodeChronicle"**
+4. Click **Install**
+5. Open the Command Palette (`Ctrl+Shift+P`) and run **CodeChronicle: Show Graph**
+6. Click **Scan Workspace** to analyze your project
+
+Cloud AI features (summaries, risk scoring, natural language Q&A) work out of the box — no configuration needed.
+
+### Build from Source
+
+#### Prerequisites
 
 - **Node.js** 20+ and npm
 - **VS Code** 1.85+
-- (Optional) **AWS Account** with Bedrock access for AI features
 
-### 1. Install Dependencies
+#### Steps
 
 ```bash
 cd extension
 npm install
+npm run build
 ```
 
-### 2. Build the Extension
+Press **F5** in VS Code to launch the Extension Development Host with the extension loaded.
 
 ```bash
 # Development mode with hot-reload watching
 npm run dev
-
-# Production build
-npm run build
 ```
-
-### 3. Run in VS Code
-
-1. Open the `CodeChronicle` folder in VS Code
-2. Press **F5** to launch the Extension Development Host
-3. In the new VS Code window, open any project you want to analyze
-4. Open the Command Palette (`Ctrl+Shift+P`) and run:
-   - `CodeChronicle: Scan Workspace` — Analyze the codebase
-   - `CodeChronicle: Open Graph View` — See the dependency graph
-
-### 4. (Optional) Enable Cloud AI
-
-See [AWS Backend Deployment](#aws-backend-deployment) below to enable AI summaries, risk scoring, and natural language Q&A.
 
 ---
 
@@ -1011,15 +1016,17 @@ npx serverless deploy --stage dev --region us-east-1
 
 After deployment, the CLI outputs the API Gateway endpoint URL. Copy it.
 
-### Configure the Extension
+### Configure the Extension (Self-Hosted Backend Only)
 
-In VS Code Settings (`Ctrl+,`), search for "CodeChronicle" and set:
+If you deploy your own backend, update VS Code Settings (`Ctrl+,`) and search for "CodeChronicle":
 
 | Setting | Value |
 |---------|-------|
 | `codechronicle.awsApiEndpoint` | Your API Gateway URL (e.g., `https://abc123.execute-api.us-east-1.amazonaws.com`) |
 | `codechronicle.enableCloudAI` | `true` |
 | `codechronicle.awsRegion` | Your deployment region (e.g., `us-east-1`) |
+
+> **Note:** The default installation connects to the hosted backend automatically. You only need to configure these settings if you deploy your own backend.
 
 ### Deployed Resources
 
@@ -1052,12 +1059,6 @@ npm install
 
 # Start development build with file watching
 npm run dev
-
-# Run linter
-npm run lint
-
-# Run tests
-npm run test
 ```
 
 Press **F5** in VS Code to launch the Extension Development Host with the extension loaded.
@@ -1199,5 +1200,6 @@ MIT
 
 <p align="center">
   Built with deterministic analysis and AI reasoning.<br/>
-  <strong>CodeChronicle</strong> — Understand your code before you change it.
+  <strong>CodeChronicle</strong> — Understand your code before you change it.<br/><br/>
+  <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle">Install from VS Code Marketplace</a>
 </p>
