@@ -24,14 +24,18 @@ class GraphWebviewProvider {
             enableScripts: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
+                vscode.Uri.joinPath(this.extensionUri, 'assets'),
             ],
         };
 
         const webviewUri = webviewView.webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')
         );
+        const iconUri = webviewView.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'assets', 'icon.png')
+        );
 
-        webviewView.webview.html = this._getHtml(webviewView.webview, webviewUri);
+        webviewView.webview.html = this._getHtml(webviewView.webview, webviewUri, iconUri);
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage((message) => {
@@ -83,7 +87,7 @@ class GraphWebviewProvider {
     /**
      * Generate webview HTML.
      */
-    _getHtml(webview, webviewUri) {
+    _getHtml(webview, webviewUri, iconUri) {
         const scriptUri = `${webviewUri}/webview.js`;
         const styleUri = `${webviewUri}/webview.css`;
         const nonce = getNonce();
@@ -93,13 +97,13 @@ class GraphWebviewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource} https://fonts.gstatic.com; connect-src https://fonts.googleapis.com https://fonts.gstatic.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource}; font-src ${webview.cspSource} https://fonts.gstatic.com; connect-src https://fonts.googleapis.com https://fonts.gstatic.com;">
   <link rel="stylesheet" href="${styleUri}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <title>CodeChronicle</title>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root" data-icon-uri="${iconUri}"></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

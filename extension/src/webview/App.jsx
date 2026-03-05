@@ -375,7 +375,7 @@ export default function App({ vscode }) {
                                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                                     Run &quot;CodeChronicle: Scan Workspace&quot; from the Command Palette
                                 </p>
-                                <button className={`btn-neon flex items-center justify-center gap-2 ${isLoading ? 'btn-loading' : ''}`} onClick={handleRefresh} disabled={isLoading}>
+                                <button className={`btn-neon flex items-center justify-center gap-2 mx-auto ${isLoading ? 'btn-loading' : ''}`} onClick={handleRefresh} disabled={isLoading}>
                                     {isLoading && <span className="btn-spinner" />}
                                     {isLoading ? 'Scanning...' : 'Scan Workspace'}
                                 </button>

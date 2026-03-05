@@ -4,7 +4,6 @@
 const path = require('path');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
-const CopyPlugin = require('copy-webpack-plugin');
 
 /** @type {import('webpack').Configuration} */
 const extensionConfig = {
@@ -87,6 +86,9 @@ const webviewConfig = {
     minimizer: ['...', new CssMinimizerPlugin()],
   },
   devtool: 'source-map',
+  performance: {
+    hints: false,
+  },
 };
 
 module.exports = [extensionConfig, webviewConfig];
