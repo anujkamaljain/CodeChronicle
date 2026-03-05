@@ -257,6 +257,12 @@ async function showGraph(context) {
                             type: 'init',
                             graph: state.graph,
                         });
+                        // Check cloud AI status on startup
+                        state.apiClient.healthCheck().then((status) => {
+                            panel.webview.postMessage({ type: 'cloudStatus', status });
+                        }).catch(() => {
+                            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+                        });
                         break;
 
                     case 'nodeClick':
@@ -351,6 +357,37 @@ async function handleNodeClick(panel, nodeId) {
             panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
         }
     }
+
+    // #26 Offline AI Fallback — if no summary at all, generate local heuristic
+    if (!node.summary) {
+        const m = node.metrics;
+        const deps = getNodeDependencies(nodeId);
+        const depnts = getNodeDependents(nodeId);
+        const risk = node.localRisk;
+        const parts = [];
+        parts.push(`This file has ${m.linesOfCode} lines of code.`);
+        if (deps.length > 0) parts.push(`It imports ${deps.length} module${deps.length !== 1 ? 's' : ''}.`);
+        if (depnts.length > 0) parts.push(`${depnts.length} file${depnts.length !== 1 ? 's' : ''} depend on it.`);
+        if (risk) {
+            parts.push(`Structural risk: ${risk.level.toUpperCase()} (${risk.score}/100).`);
+            if (risk.factors && risk.factors.length > 0) {
+                parts.push(`Factors: ${risk.factors.join('; ')}.`);
+            }
+        }
+        const ext = node.label.split('.').pop() || '';
+        if (['jsx', 'tsx'].includes(ext)) parts.push('This is a React component file.');
+        else if (['css', 'scss', 'sass', 'less'].includes(ext)) parts.push('This is a stylesheet.');
+        else if (ext === 'json') parts.push('This is a configuration/data file.');
+
+        const localSummary = `[Local Analysis] ${parts.join(' ')}`;
+        panel.webview.postMessage({
+            type: 'summary',
+            nodeId,
+            summary: localSummary,
+            cached: false,
+            localFallback: true,
+        });
+    }
 }
 
 async function handleBlastRadius(panel, nodeId) {
@@ -381,19 +418,24 @@ async function handleQuery(panel, query) {
         const rankedFiles = rankFilesByRelevance(query, state.graph);
         const topFiles = rankedFiles.slice(0, 10);
 
-        // Read actual file content for the top 5 most relevant files
+        // Read actual file content for the top 7 most relevant files (up from 5)
         const workspacePath = state.graph.metadata?.workspacePath || '';
         const filesWithContent = topFiles.map((f, i) => {
             const entry = {
                 path: f.path,
                 summary: f.summary,
-                metrics: f.metrics,
+                metrics: {
+                    ...f.metrics,
+                    dependencyCount: getNodeDependencies(f.id)?.length || 0,
+                    dependentCount: getNodeDependents(f.id)?.length || 0,
+                },
             };
-            if (i < 5 && workspacePath) {
+            // Read content for top 7 files (balanced: more files, slightly less content each)
+            if (i < 7 && workspacePath) {
                 try {
                     const absPath = path.join(workspacePath, f.path);
                     const raw = fs.readFileSync(absPath, 'utf-8');
-                    entry.content = cleanCodeContent(raw).substring(0, 80000); // ~20000 tokens
+                    entry.content = cleanCodeContent(raw).substring(0, 50000); // ~12.5K tokens per file
                 } catch {
                     // File not readable — skip content
                 }
@@ -409,6 +451,12 @@ async function handleQuery(panel, query) {
             },
             maxResults: 10,
         });
+
+        // Resolve AI-generated reference paths against actual graph nodes
+        if (result.references && result.references.length > 0) {
+            result.references = resolveQueryReferences(result.references, state.graph);
+        }
+
         panel.webview.postMessage({ type: 'queryResult', result });
     } catch (err) {
         console.warn('Query failed:', err.message);
@@ -594,8 +642,105 @@ function getNodeDependents(nodeId) {
 function openFileInEditor(relativePath) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) return;
-    const fullPath = vscode.Uri.joinPath(workspaceFolders[0].uri, relativePath);
-    vscode.window.showTextDocument(fullPath);
+
+    // Try the path as-is first
+    const fullPath = path.join(workspaceFolders[0].uri.fsPath, relativePath);
+    if (fs.existsSync(fullPath)) {
+        vscode.window.showTextDocument(vscode.Uri.file(fullPath));
+        return;
+    }
+
+    // Try resolving against current graph nodes if direct path failed
+    if (state.graph) {
+        const resolved = resolveFilePath(relativePath, state.graph);
+        if (resolved) {
+            const resolvedFull = path.join(workspaceFolders[0].uri.fsPath, resolved);
+            if (fs.existsSync(resolvedFull)) {
+                vscode.window.showTextDocument(vscode.Uri.file(resolvedFull));
+                return;
+            }
+        }
+    }
+
+    // Nothing worked — show a helpful message
+    console.warn(`CodeChronicle: Could not resolve file path: ${relativePath}`);
+    vscode.window.showWarningMessage(`CodeChronicle: Could not find file "${relativePath}" in the workspace.`);
+}
+
+/**
+ * Resolve a single file path against graph node keys.
+ * Uses multi-strategy matching: exact → case-insensitive → suffix → basename.
+ * @param {string} targetPath
+ * @param {Object} graph
+ * @returns {string|null} Matched graph node path or null
+ */
+function resolveFilePath(targetPath, graph) {
+    if (!graph || !graph.nodes) return null;
+
+    // Normalize to forward slashes and strip leading ./
+    let target = targetPath.replace(/\\/g, '/');
+    if (target.startsWith('./')) target = target.substring(2);
+
+    const nodeKeys = Object.keys(graph.nodes);
+
+    // 1. Exact match
+    if (graph.nodes[target]) return target;
+
+    // 2. Case-insensitive match
+    const lowerTarget = target.toLowerCase();
+    const ciMatch = nodeKeys.find(k => k.toLowerCase() === lowerTarget);
+    if (ciMatch) return ciMatch;
+
+    // 3. Suffix match — the AI might return "components/Foo.jsx"
+    //    but the real key is "src/webview/components/Foo.jsx"
+    const suffixMatch = nodeKeys.find(k => {
+        const kLower = k.toLowerCase();
+        return kLower.endsWith('/' + lowerTarget) || kLower.endsWith('\\' + lowerTarget);
+    });
+    if (suffixMatch) return suffixMatch;
+
+    // 4. Basename match — last resort, only use if unique
+    const targetBasename = path.basename(target).toLowerCase();
+    const basenameMatches = nodeKeys.filter(k =>
+        path.basename(k).toLowerCase() === targetBasename
+    );
+    if (basenameMatches.length === 1) return basenameMatches[0];
+
+    // 5. If multiple basename matches, pick the one with the best directory overlap
+    if (basenameMatches.length > 1) {
+        const targetDir = path.dirname(target).replace(/\\/g, '/').toLowerCase();
+        const best = basenameMatches.find(k => {
+            const kDir = path.dirname(k).replace(/\\/g, '/').toLowerCase();
+            return kDir.endsWith(targetDir) || targetDir.endsWith(kDir);
+        });
+        if (best) return best;
+    }
+
+    return null;
+}
+
+/**
+ * Resolve AI-generated reference paths against actual graph node keys.
+ * Replaces ref.path with the correct node path if a match is found,
+ * otherwise marks the reference as unresolved.
+ * @param {Array} references
+ * @param {Object} graph
+ * @returns {Array} references with resolved paths
+ */
+function resolveQueryReferences(references, graph) {
+    if (!graph || !graph.nodes) return references;
+
+    return references.map(ref => {
+        if (!ref.path) return { ...ref, unresolved: true };
+
+        const resolved = resolveFilePath(ref.path, graph);
+        if (resolved) {
+            return { ...ref, path: resolved };
+        } else {
+            console.warn(`CodeChronicle: Could not resolve AI reference path: ${ref.path}`);
+            return { ...ref, unresolved: true };
+        }
+    });
 }
 
 async function askAI() {

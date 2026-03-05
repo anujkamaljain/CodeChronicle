@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+let toastId = 0;
+
 const useStore = create((set, get) => ({
     // Graph data
     graph: null,
@@ -8,6 +10,7 @@ const useStore = create((set, get) => ({
 
     // UI state
     activeTab: 'graph', // 'graph' | 'blast' | 'query' | 'risk'
+    prevTabIndex: 0,
     isLoading: false,
     loadingMessage: '',
 
@@ -36,6 +39,16 @@ const useStore = create((set, get) => ({
     nodeLocalRisk: null,
     nodeAiRisk: null,
 
+    // Toast notifications
+    toasts: [],
+
+    // Graph search & filter
+    searchQuery: '',
+    searchFilter: { extensions: [], riskLevels: [] },
+
+    // AI progress indicator
+    aiProgress: null, // { stage: 'reading' | 'sending' | 'processing' | 'done', label: string }
+
     // Error state
     error: null,
 
@@ -60,7 +73,11 @@ const useStore = create((set, get) => ({
     },
 
     setHighlightedNodes: (nodes) => set({ highlightedNodes: nodes }),
-    setActiveTab: (tab) => set({ activeTab: tab }),
+    setActiveTab: (tab) => {
+        const tabs = ['graph', 'blast', 'query', 'risk'];
+        const prevIdx = tabs.indexOf(get().activeTab);
+        set({ activeTab: tab, prevTabIndex: prevIdx });
+    },
     setLoading: (loading, message) => set({ isLoading: loading, loadingMessage: message || '' }),
 
     setBlastRadiusMode: (enabled, data) =>
@@ -84,6 +101,25 @@ const useStore = create((set, get) => ({
     setLoadingSummary: (loading) => set({ loadingSummary: loading }),
     setError: (error) => set({ error }),
     clearError: () => set({ error: null }),
+
+    // Toast actions
+    addToast: (message, type = 'info', duration = 4000) => {
+        const id = ++toastId;
+        set((s) => ({ toasts: [...s.toasts, { id, message, type, duration }] }));
+        if (duration > 0) {
+            setTimeout(() => get().removeToast(id), duration);
+        }
+        return id;
+    },
+    removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+    // Search actions
+    setSearchQuery: (query) => set({ searchQuery: query }),
+    setSearchFilter: (filter) => set((s) => ({ searchFilter: { ...s.searchFilter, ...filter } })),
+
+    // AI progress actions
+    setAiProgress: (progress) => set({ aiProgress: progress }),
 }));
 
 export default useStore;
+

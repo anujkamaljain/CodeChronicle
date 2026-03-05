@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
 
 class GraphWebviewProvider {
     /**
@@ -71,8 +72,12 @@ class GraphWebviewProvider {
     _openFile(relativePath) {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-        const fullPath = vscode.Uri.joinPath(workspaceFolders[0].uri, relativePath);
-        vscode.window.showTextDocument(fullPath);
+        const fullPath = path.join(workspaceFolders[0].uri.fsPath, relativePath);
+        if (fs.existsSync(fullPath)) {
+            vscode.window.showTextDocument(vscode.Uri.file(fullPath));
+        } else {
+            vscode.window.showWarningMessage(`CodeChronicle: Could not find file "${relativePath}" in the workspace.`);
+        }
     }
 
     /**

@@ -599,3 +599,358 @@
     background-size: 24px 24px;
   }
 }
+
+/* ═══════════════════════════════════════════════════
+   Toast Notifications
+   ═══════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed;
+  bottom: 40px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 260px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(10, 17, 34, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 240, 255, 0.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.toast-success .toast-icon {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.toast-error .toast-icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.toast-info .toast-icon {
+  background: rgba(0, 240, 255, 0.12);
+  color: #00f0ff;
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-message {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 0 0 10px 10px;
+}
+
+.toast-success .toast-progress {
+  background: #10b981;
+}
+
+.toast-error .toast-progress {
+  background: #ef4444;
+}
+
+.toast-info .toast-progress {
+  background: #00f0ff;
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Skeleton Loading
+   ═══════════════════════════════════════════════════ */
+.skeleton-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 24px;
+  padding: 40px;
+}
+
+.skeleton-graph {
+  width: 280px;
+  height: 200px;
+  position: relative;
+}
+
+.skeleton-node {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.08);
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+.skeleton-edge {
+  position: absolute;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.06);
+  transform-origin: left center;
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.06) 0%, rgba(148, 163, 184, 0.12) 50%, rgba(148, 163, 184, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-title {
+  height: 16px;
+  width: 180px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.05) 0%, rgba(0, 240, 255, 0.12) 50%, rgba(0, 240, 255, 0.05) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Graph Search Bar
+   ═══════════════════════════════════════════════════ */
+.graph-search-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(10, 17, 34, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 280px;
+}
+
+.graph-search-bar:focus-within {
+  border-color: rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.graph-search-icon {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.graph-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: 'Inter', sans-serif;
+}
+
+.graph-search-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.graph-search-badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--neon-cyan);
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.graph-search-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.graph-search-clear:hover {
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════
+   AI Progress Indicator
+   ═══════════════════════════════════════════════════ */
+.ai-progress {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: rgba(10, 17, 34, 0.94);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ai-progress-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  transition: color 0.3s;
+}
+
+.ai-progress-step.active {
+  color: var(--neon-cyan);
+}
+
+.ai-progress-step.done {
+  color: var(--neon-green);
+}
+
+.ai-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.ai-progress-step.active .ai-progress-dot {
+  background: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  animation: skeleton-pulse 1s ease-in-out infinite;
+}
+
+.ai-progress-step.done .ai-progress-dot {
+  background: var(--neon-green);
+}
+
+.ai-progress-connector {
+  width: 16px;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════
+   Enhanced Graph Tooltip
+   ═══════════════════════════════════════════════════ */
+.graph-tooltip-risk-bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.graph-tooltip-risk-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+
+.graph-tooltip-summary {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-style: italic;
+}
+
+.graph-tooltip-centrality {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}

@@ -1,6 +1,162 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 
+// ── Radial Gauge Component ──────────────────────────────────────────
+function RadialGauge({ value, max = 100, label, color, size = 64 }) {
+    const pct = Math.min(value / max, 1);
+    const r = (size - 8) / 2;
+    const circumference = 2 * Math.PI * r;
+    const offset = circumference * (1 - pct);
+
+    return (
+        <div className="flex flex-col items-center gap-1">
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <circle cx={size / 2} cy={size / 2} r={r}
+                    fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="4" />
+                <circle cx={size / 2} cy={size / 2} r={r}
+                    fill="none" stroke={color} strokeWidth="4"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                    style={{ transition: 'stroke-dashoffset 0.8s ease-out' }}
+                />
+                <text x={size / 2} y={size / 2 + 1}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill={color} fontSize="0.75rem" fontWeight="700"
+                    fontFamily="'JetBrains Mono', monospace"
+                >
+                    {value}
+                </text>
+            </svg>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2 }}>
+                {label}
+            </span>
+        </div>
+    );
+}
+
+// ── Health Dashboard ────────────────────────────────────────────────
+function HealthDashboard({ riskData, graph }) {
+    const stats = useMemo(() => {
+        if (!graph || !riskData) return null;
+        const nodes = Object.values(graph.nodes);
+
+        // Average risk score
+        let totalScore = 0;
+        let scoredCount = 0;
+        let mostRisky = null;
+        let mostConnected = null;
+        let maxScore = 0;
+        let maxConnections = 0;
+
+        for (const node of nodes) {
+            const risk = node.riskFactor || node.localRisk;
+            if (risk?.score) {
+                totalScore += risk.score;
+                scoredCount++;
+                if (risk.score > maxScore) {
+                    maxScore = risk.score;
+                    mostRisky = node;
+                }
+            }
+            const connections = (node.metrics?.dependencyCount || 0) + (node.metrics?.dependentCount || 0);
+            if (connections > maxConnections) {
+                maxConnections = connections;
+                mostConnected = node;
+            }
+        }
+
+        const avgRisk = scoredCount > 0 ? Math.round(totalScore / scoredCount) : 0;
+        // Health score: inverse of average risk (100 = healthy, 0 = very risky)
+        const healthScore = Math.max(0, 100 - avgRisk);
+
+        return { avgRisk, healthScore, mostRisky, mostConnected, maxConnections };
+    }, [graph, riskData]);
+
+    if (!stats) return null;
+
+    const healthColor = stats.healthScore >= 70 ? 'var(--neon-green)' : stats.healthScore >= 40 ? 'var(--risk-medium)' : 'var(--risk-high)';
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-4"
+        >
+            <h4 className="text-xs font-semibold mb-4 uppercase tracking-widest"
+                style={{ color: 'var(--text-muted)' }}>
+                Codebase Health
+            </h4>
+
+            <div className="flex items-center justify-around mb-4">
+                <RadialGauge value={stats.healthScore} label="Health Score" color={healthColor} size={72} />
+                <RadialGauge value={riskData.total} max={riskData.total} label="Total Files" color="var(--neon-cyan)" size={64} />
+                <RadialGauge value={stats.avgRisk} label="Avg Risk" color="var(--risk-medium)" size={64} />
+            </div>
+
+            <div className="space-y-2">
+                {stats.mostRisky && (
+                    <div className="flex items-center gap-2 text-xs">
+                        <span style={{ color: 'var(--risk-high)' }}>⚠</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Most risky:</span>
+                        <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+                            {stats.mostRisky.label}
+                        </span>
+                        <span className="font-mono" style={{ color: 'var(--risk-high)' }}>
+                            {(stats.mostRisky.riskFactor || stats.mostRisky.localRisk)?.score}/100
+                        </span>
+                    </div>
+                )}
+                {stats.mostConnected && (
+                    <div className="flex items-center gap-2 text-xs">
+                        <span style={{ color: 'var(--neon-purple)' }}>◉</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Most connected:</span>
+                        <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+                            {stats.mostConnected.label}
+                        </span>
+                        <span className="font-mono" style={{ color: 'var(--neon-purple)' }}>
+                            {stats.maxConnections} links
+                        </span>
+                    </div>
+                )}
+            </div>
+        </motion.div>
+    );
+}
+
+// ── Export Risk Report ──────────────────────────────────────────────
+function generateReport(graph, riskData) {
+    const lines = [];
+    lines.push('# CodeChronicle Risk Report');
+    lines.push(`\nGenerated: ${new Date().toLocaleString()}`);
+    lines.push(`\n## Summary`);
+    lines.push(`- **Total Files:** ${riskData.total}`);
+    lines.push(`- **High Risk:** ${riskData.high.length} (${riskData.highPct}%)`);
+    lines.push(`- **Medium Risk:** ${riskData.medium.length} (${riskData.mediumPct}%)`);
+    lines.push(`- **Low Risk:** ${riskData.low.length} (${riskData.lowPct}%)`);
+
+    const appendSection = (title, files) => {
+        if (files.length === 0) return;
+        lines.push(`\n## ${title}`);
+        lines.push('| File | Score | LOC | Deps | Used By | Explanation |');
+        lines.push('|------|-------|-----|------|---------|-------------|');
+        for (const node of files) {
+            const risk = node.riskFactor || node.localRisk;
+            const score = risk?.score || 0;
+            const explanation = (risk?.explanation || '').replace(/\|/g, '/');
+            lines.push(`| ${node.path} | ${score}/100 | ${node.metrics.linesOfCode} | ${node.metrics.dependencyCount} | ${node.metrics.dependentCount} | ${explanation} |`);
+        }
+    };
+
+    appendSection('High Risk Files', riskData.high);
+    appendSection('Medium Risk Files', riskData.medium);
+
+    return lines.join('\n');
+}
+
+
+// ── Main RiskPanel ──────────────────────────────────────────────────
 export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFile }) {
     const riskData = useMemo(() => {
         if (!graph) return null;
@@ -20,7 +176,6 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
             }
         }
 
-        // Sort each by risk score descending
         const sortByScore = (a, b) => {
             const sa = (a.riskFactor || a.localRisk)?.score || 0;
             const sb = (b.riskFactor || b.localRisk)?.score || 0;
@@ -40,6 +195,18 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
         };
     }, [graph]);
 
+    const handleExport = () => {
+        if (!graph || !riskData) return;
+        const report = generateReport(graph, riskData);
+        const blob = new Blob([report], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `codechronicle-risk-report-${new Date().toISOString().split('T')[0]}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     if (!graph || !riskData) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -57,12 +224,30 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
     return (
         <div className="max-w-4xl mx-auto space-y-4">
             {/* Header */}
-            <div className="text-center">
-                <h2 className="text-lg font-bold text-gradient mb-1">Risk Map</h2>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {riskData.total} files analyzed • Structural risk assessment
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-lg font-bold text-gradient mb-1">Risk Map</h2>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {riskData.total} files analyzed • Structural risk assessment
+                    </p>
+                </div>
+                <button
+                    onClick={handleExport}
+                    className="text-xs px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5"
+                    style={{
+                        background: 'rgba(0, 240, 255, 0.08)',
+                        border: '1px solid rgba(0, 240, 255, 0.15)',
+                        color: 'var(--neon-cyan)',
+                    }}
+                >
+                    📄 Export Report
+                </button>
             </div>
+
+            {/* Health Dashboard (#16) */}
+            <HealthDashboard riskData={riskData} graph={graph} />
+
+
 
             {/* Risk distribution bar */}
             <motion.div

@@ -128,7 +128,7 @@ Dependents: ${metrics.dependentCount}
 Centrality Score: ${metrics.centralityScore}` : ''}
 
 ${fileContent ? `File Content:
-${fileContent.substring(0, 4000)}` : 'File content not provided.'}
+${fileContent.substring(0, 80000)}` : 'File content not provided — infer purpose from file path, metrics, and dependency graph only.'}
 
 ${dependencies ? `This file imports: ${JSON.stringify(dependencies)}` : ''}
 ${dependents ? `This file is imported by: ${JSON.stringify(dependents)}` : ''}
@@ -147,7 +147,7 @@ function buildQueryPrompt({ query, graphContext, maxResults }) {
         ?.map((f) => {
             let entry = `### ${f.path}`;
             if (f.summary) entry += `\nSummary: ${f.summary}`;
-            entry += `\n(${f.metrics?.linesOfCode || '?'} LOC, centrality: ${f.metrics?.centralityScore || '?'})`;
+            entry += `\n(${f.metrics?.linesOfCode || '?'} LOC, ${f.metrics?.dependencyCount || 0} deps, ${f.metrics?.dependentCount || 0} dependents, centrality: ${(f.metrics?.centralityScore || 0).toFixed(3)})`;
             if (f.content) {
                 entry += `\n\`\`\`\n${f.content}\n\`\`\``;
             }
@@ -155,37 +155,39 @@ function buildQueryPrompt({ query, graphContext, maxResults }) {
         })
         ?.join('\n\n') || 'No files available.';
 
-    return `You are a code analysis assistant answering questions about a codebase. You have access to actual source code from the most relevant files.
+    return `You are a precise code analysis assistant. Answer questions about a codebase using ONLY the source code and metadata provided below. Do NOT hallucinate or guess information that isn't in the provided context.
 
 User Query: ${query}
 
 Codebase Context:
-Total Files: ${graphContext?.totalFiles || 'unknown'}
+Total Files in Codebase: ${graphContext?.totalFiles || 'unknown'}
+Files Provided Below: ${graphContext?.relevantFiles?.length || 0} (ranked by relevance)
 
-Relevant Files (ranked by relevance to the query):
+Relevant Files:
 ${fileEntries}
 
-Instructions:
-- Give an ACCURATE and CONCISE answer based on the actual code provided above.
-- Reference specific files, function names, routes, or logic you can see in the code.
-- Do NOT guess or speculate. If the code doesn't clearly answer the question, say so.
-- Keep the answer brief but correct.
+RULES:
+1. Base your answer STRICTLY on the code and metadata provided above.
+2. Reference specific file paths, function/class/variable names, and logic you can actually see.
+3. If the provided files don't contain enough information to fully answer, explicitly state what's missing.
+4. Do NOT invent line numbers — they are unreliable. Reference by function/class name instead.
+5. Be concise but thorough. Prefer specificity over vagueness.
+6. For large codebases, focus on the most architecturally significant files.
 
 Format your response as JSON:
 {
-  "answer": "Your concise, accurate answer here",
+  "answer": "Your precise answer referencing actual code",
   "references": [
     {
       "path": "src/file.js",
-      "lineNumbers": [],
-      "snippet": "relevant info from the code"
+      "snippet": "brief description of what this file contributes to the answer"
     }
   ],
-  "suggestedQuestions": ["question1", "question2"],
+  "suggestedQuestions": ["follow-up question 1", "follow-up question 2"],
   "confidence": 0.85
 }
 
-Return ONLY the JSON object, no markdown formatting.`;
+Return ONLY the JSON object, no markdown wrapping.`;
 }
 
 // ========================================

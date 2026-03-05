@@ -109,7 +109,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 {localRisk && (
                     <RiskScoreBar
                         label="Structural Risk Score"
-                        sublabel="Based on code metrics"
+                        sublabel="Scored on: Lines of Code, Dependency Count, Dependent Count, and Centrality Score"
                         risk={localRisk}
                         accentColor="var(--neon-cyan)"
                     />
@@ -119,7 +119,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                 {aiRisk ? (
                     <RiskScoreBar
                         label="AI Risk Score"
-                        sublabel="AI-powered assessment"
+                        sublabel="Scored on: Business logic, Side effects (DB/API/IO), Security ops, Hidden coupling, and Control flow complexity"
                         risk={aiRisk}
                         accentColor="var(--neon-purple)"
                     />
@@ -216,6 +216,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
 }
 
 function RiskScoreBar({ label, sublabel, risk, accentColor }) {
+    const [showTip, setShowTip] = React.useState(false);
     const levelColor = risk.level === 'high' ? 'var(--risk-high)' : risk.level === 'medium' ? 'var(--risk-medium)' : 'var(--risk-low)';
     const gradient = risk.level === 'high'
         ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
@@ -229,7 +230,42 @@ function RiskScoreBar({ label, sublabel, risk, accentColor }) {
                 <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
                     <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                    <span className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '0.5625rem' }}>— {sublabel}</span>
+                    {/* Hover tooltip for score basis */}
+                    <span
+                        className="relative cursor-help"
+                        onMouseEnter={() => setShowTip(true)}
+                        onMouseLeave={() => setShowTip(false)}
+                    >
+                        <span
+                            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-xs"
+                            style={{
+                                fontSize: '0.5rem',
+                                fontWeight: 700,
+                                background: 'rgba(148, 163, 184, 0.12)',
+                                color: 'var(--text-muted)',
+                                border: '1px solid rgba(148, 163, 184, 0.2)',
+                            }}
+                        >
+                            ?
+                        </span>
+                        {showTip && (
+                            <span
+                                className="absolute left-1/2 bottom-full mb-1.5 px-2.5 py-1.5 rounded-lg text-xs z-50"
+                                style={{
+                                    transform: 'translateX(-50%)',
+                                    width: '220px',
+                                    background: 'rgba(10, 17, 34, 0.95)',
+                                    border: '1px solid rgba(0, 240, 255, 0.25)',
+                                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 240, 255, 0.08)',
+                                    color: 'var(--text-secondary)',
+                                    fontSize: '0.6875rem',
+                                    lineHeight: '1.4',
+                                }}
+                            >
+                                {sublabel}
+                            </span>
+                        )}
+                    </span>
                 </div>
                 <span className="text-sm font-bold font-mono" style={{ color: levelColor }}>
                     {risk.score}/100

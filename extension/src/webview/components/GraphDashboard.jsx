@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import cytoscape from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import useStore from '../store/useStore';
+import GraphSearchBar from './GraphSearchBar';
 
 // Register layout
 cytoscape.use(coseBilkent);
@@ -157,6 +158,11 @@ function ParticleCanvas() {
 function GraphTooltip({ data, position }) {
     if (!data) return null;
     const riskColors = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };
+    const riskGradients = {
+        low: 'linear-gradient(90deg, #3b82f6, #10b981)',
+        medium: 'linear-gradient(90deg, #10b981, #f59e0b)',
+        high: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+    };
     return (
         <div
             className="graph-tooltip"
@@ -187,11 +193,26 @@ function GraphTooltip({ data, position }) {
                     <span className="graph-tooltip-metric-val">{data.dependentCount ?? 0}</span>
                     <span className="graph-tooltip-metric-lbl">Used by</span>
                 </div>
+                <div className="graph-tooltip-metric">
+                    <span className="graph-tooltip-metric-val">{((data.centralityScore || 0) * 100).toFixed(0)}%</span>
+                    <span className="graph-tooltip-metric-lbl">Centrality</span>
+                </div>
             </div>
             {data.riskLevel && (
-                <div className="graph-tooltip-risk" style={{ color: riskColors[data.riskLevel] || '#94a3b8' }}>
-                    ● {data.riskLevel.toUpperCase()} RISK
-                </div>
+                <>
+                    <div className="graph-tooltip-risk" style={{ color: riskColors[data.riskLevel] || '#94a3b8' }}>
+                        ● {data.riskLevel.toUpperCase()} RISK — {data.riskScore}/100
+                    </div>
+                    <div className="graph-tooltip-risk-bar">
+                        <div
+                            className="graph-tooltip-risk-fill"
+                            style={{
+                                width: `${data.riskScore || 0}%`,
+                                background: riskGradients[data.riskLevel] || riskGradients.low,
+                            }}
+                        />
+                    </div>
+                </>
             )}
         </div>
     );
@@ -268,6 +289,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
     const containerRef = useRef(null);
     const { highlightedNodes, blastRadiusMode, sidebarOpen } = useStore();
     const [tooltip, setTooltip] = useState(null);
+    const [zoomLevel, setZoomLevel] = useState(100);
 
     // Resize Cytoscape canvas when sidebar opens/closes
     useEffect(() => {
@@ -535,6 +557,27 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                         'opacity': 0.04,
                     },
                 },
+                // Search filter styles
+                {
+                    selector: 'node.search-dim',
+                    style: {
+                        'opacity': 0.1,
+                    },
+                },
+                {
+                    selector: 'node.search-match',
+                    style: {
+                        'border-width': 3,
+                        'border-color': '#00f0ff',
+                        'border-opacity': 0.9,
+                    },
+                },
+                {
+                    selector: 'edge.search-dim',
+                    style: {
+                        'opacity': 0.03,
+                    },
+                },
             ],
             layout: {
                 name: 'cose-bilkent',
@@ -572,6 +615,31 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
             }
         });
 
+        // Double-click on background: fit to view
+        cy.on('dbltap', (evt) => {
+            if (evt.target === cy) {
+                cy.animate({ fit: { padding: 50 }, duration: 400, easing: 'ease-out-cubic' });
+            }
+        });
+
+        // Track zoom level
+        cy.on('zoom', () => {
+            setZoomLevel(Math.round(cy.zoom() * 100));
+        });
+
+        // Drag-to-Pan cursor (#20)
+        containerRef.current.style.cursor = 'grab';
+        cy.on('mousedown', (evt) => {
+            if (evt.target === cy) {
+                containerRef.current.style.cursor = 'grabbing';
+            }
+        });
+        cy.on('mouseup', (evt) => {
+            if (evt.target === cy) {
+                containerRef.current.style.cursor = 'grab';
+            }
+        });
+
         // Hover: show tooltip only
         cy.on('mouseover', 'node', (evt) => {
             const node = evt.target;
@@ -582,7 +650,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         });
 
         cy.on('mouseout', 'node', () => {
-            containerRef.current.style.cursor = 'default';
+            containerRef.current.style.cursor = 'grab';
             setTooltip(null);
         });
 
@@ -697,10 +765,30 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
         }
     }, []);
 
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handler = (e) => {
+            // Esc: deselect node / close sidebar
+            if (e.key === 'Escape') {
+                onNodeClick(null);
+                useStore.getState().setSearchQuery('');
+            }
+            // F: fit view (when not typing)
+            if (e.key === 'f' && !e.ctrlKey && !e.metaKey && document.activeElement?.tagName !== 'INPUT') {
+                handleFitView();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [onNodeClick, handleFitView]);
+
     return (
         <div className="relative w-full h-full">
             {/* Particle background */}
             <ParticleCanvas />
+
+            {/* Search bar */}
+            <GraphSearchBar cyRef={cyRef} />
 
             {/* Graph container */}
             <div ref={containerRef} className="w-full h-full" style={{ position: 'relative', zIndex: 1 }} />
@@ -718,6 +806,14 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                         <line x1="8" y1="11" x2="14" y2="11" />
                     </svg>
                 </button>
+                <span style={{
+                    fontSize: '0.6rem',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    minWidth: 36,
+                    display: 'block',
+                }}>{zoomLevel}%</span>
                 <button onClick={handleZoomOut} className="graph-control-btn" title="Zoom out">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="11" cy="11" r="8" />
@@ -725,7 +821,7 @@ export default function GraphDashboard({ graph, onNodeClick, onBlastRadius, sele
                         <line x1="8" y1="11" x2="14" y2="11" />
                     </svg>
                 </button>
-                <button onClick={handleFitView} className="graph-control-btn" title="Fit to view">
+                <button onClick={handleFitView} className="graph-control-btn" title="Fit to view (F)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M8 3H5a2 2 0 0 0-2 2v3" />
                         <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
