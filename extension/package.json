@@ -3,7 +3,7 @@
   "displayName": "CodeChronicle",
   "description": "AI-Powered codebase analysis with interactive dependency graphs, blast radius prediction, and natural language exploration. Powered by AWS Bedrock.",
   "version": "0.1.0",
-  "publisher": "codechronicle",
+  "publisher": "AnujKamalJain",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
