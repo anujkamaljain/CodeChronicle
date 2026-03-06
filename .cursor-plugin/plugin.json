@@ -1,0 +1,21 @@
+{
+  "name": "codechronicle",
+  "version": "0.1.2",
+  "description": "AI-powered codebase analysis with interactive dependency graphs, blast radius prediction, and natural language exploration. Designed to work great in Cursor.",
+  "author": {
+    "name": "Anuj Kamal Jain"
+  },
+  "homepage": "https://github.com/anujkamaljain/CodeChronicle#readme",
+  "repository": "https://github.com/anujkamaljain/CodeChronicle",
+  "license": "MIT",
+  "keywords": [
+    "codechronicle",
+    "dependency graph",
+    "code analysis",
+    "blast radius",
+    "ai",
+    "aws bedrock",
+    "cursor"
+  ],
+  "logo": "extension/assets/icon.png"
+}
