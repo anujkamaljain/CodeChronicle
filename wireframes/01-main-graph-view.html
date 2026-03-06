@@ -30,29 +30,55 @@
 
         <!-- Main Content Area -->
         <div class="flex-1 flex flex-col">
-            <!-- Top Toolbar -->
+            <!-- Top Toolbar (matches extension toolbar semantics) -->
             <div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <h1 class="text-lg font-semibold">CodeChronicle</h1>
                     <div class="flex items-center space-x-2">
                         <button class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                            Scan Workspace
+                        </button>
+                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
                             Refresh Graph
-                        </button>
-                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-                            Save Snapshot
-                        </button>
-                        <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-                            Settings
                         </button>
                     </div>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <div class="text-sm text-gray-400">
+                <div class="flex items-center space-x-3 text-sm text-gray-400">
+                    <div>
                         <span class="text-green-400">●</span> Cloud Connected
                     </div>
-                    <div class="text-sm text-gray-400">
-                        Files: <span class="text-white">1,247</span>
+                    <div class="hidden md:flex items-center space-x-1">
+                        <span class="text-gray-500">Nodes</span>
+                        <span class="text-white font-mono">1,247</span>
+                        <span class="text-gray-600">•</span>
+                        <span class="text-gray-500">Edges</span>
+                        <span class="text-white font-mono">3,812</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Tab Bar (Graph / Blast Radius / AI Query / Risk Map) -->
+            <div class="bg-gray-900 border-b border-gray-800 px-6 py-2 flex items-center text-sm space-x-1">
+                <button class="flex items-center space-x-2 px-3 py-1 rounded bg-gray-800 text-white">
+                    <span class="text-xs opacity-70">◉</span>
+                    <span>Graph</span>
+                </button>
+                <button class="flex items-center space-x-2 px-3 py-1 rounded text-gray-400 hover:bg-gray-800 hover:text-gray-100">
+                    <span class="text-xs opacity-70">◎</span>
+                    <span>Blast Radius</span>
+                </button>
+                <button class="flex items-center space-x-2 px-3 py-1 rounded text-gray-400 hover:bg-gray-800 hover:text-gray-100">
+                    <span class="text-xs opacity-70">⬡</span>
+                    <span>AI Query</span>
+                </button>
+                <button class="flex items-center space-x-2 px-3 py-1 rounded text-gray-400 hover:bg-gray-800 hover:text-gray-100">
+                    <span class="text-xs opacity-70">△</span>
+                    <span>Risk Map</span>
+                </button>
+                <div class="ml-auto flex items-center space-x-2 text-xs text-gray-500">
+                    <span>Tip: Press</span>
+                    <span class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono text-[10px]">F</span>
+                    <span>to fit view</span>
                 </div>
             </div>
 
