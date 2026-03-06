@@ -1520,3 +1520,15 @@
   line-height: 1.65;
   margin: 0;
 }
+
+/* Attribution badges */
+.attribution-badge {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.attribution-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  filter: brightness(1.2);
+}
