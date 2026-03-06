@@ -222,9 +222,8 @@
 
   .tab-help-tooltip {
     position: absolute;
-    left: 50%;
+    left: -8px;
     top: 120%;
-    transform: translateX(-50%);
     white-space: nowrap;
     z-index: 40;
     opacity: 0;
@@ -241,7 +240,7 @@
 
   .tab-help:hover .tab-help-tooltip {
     opacity: 1;
-    transform: translateX(-50%) translateY(2px);
+    transform: translateY(2px);
   }
 
   /* Risk badge */
@@ -1036,9 +1035,12 @@
 }
 
 @keyframes sidebar-arrow-bounce {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(4px);
   }
