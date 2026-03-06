@@ -76,7 +76,7 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
         <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="w-[340px] h-full relative"
+            className="w-full h-full relative"
             style={{ background: 'var(--bg-secondary)' }}
         >
             <div ref={scrollRef} className="h-full overflow-y-auto p-4">
@@ -177,9 +177,9 @@ export default function FileDetailsPanel({ onOpenFile, onBlastRadius, onRequestR
                             {aiRisk ? 'AI Factors' : 'Structural Factors'}
                         </div>
                         {displayRisk.factors.map((factor, i) => (
-                            <div key={i} className="flex items-start gap-2">
-                                <span className="text-xs mt-0.5" style={{ color: 'var(--risk-medium)' }}>▸</span>
-                                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{factor}</span>
+                            <div key={i} className="flex items-start gap-2 min-w-0">
+                                <span className="text-xs mt-0.5 flex-shrink-0" style={{ color: 'var(--risk-medium)' }}>▸</span>
+                                <span className="text-xs min-w-0" style={{ color: 'var(--text-secondary)', wordBreak: 'break-word' }}>{factor}</span>
                             </div>
                         ))}
                     </div>
@@ -315,7 +315,8 @@ function RiskScoreBar({ label, sublabel, risk, accentColor }) {
                                 className="absolute left-1/2 bottom-full mb-1.5 px-2.5 py-1.5 rounded-lg text-xs z-50"
                                 style={{
                                     transform: 'translateX(-50%)',
-                                    width: '220px',
+                                    maxWidth: '220px',
+                                    width: 'max-content',
                                     background: 'rgba(10, 17, 34, 0.95)',
                                     border: '1px solid rgba(0, 240, 255, 0.25)',
                                     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 240, 255, 0.08)',

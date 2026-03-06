@@ -11,11 +11,11 @@ export default function Toolbar({ onRefresh }) {
     const iconUri = getIconUri();
 
     return (
-        <div className="flex items-center justify-between px-4 py-2 border-b"
+        <div className="flex items-center justify-between px-2 sm:px-4 py-2 border-b gap-2"
             style={{ borderColor: 'var(--border-glass)', background: 'rgba(5, 10, 20, 0.8)' }}>
             {/* Logo */}
-            <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                     {iconUri ? (
                         <img src={iconUri} alt="CodeChronicle" className="h-6 rounded-lg" style={{ width: '40px', border: '1px solid rgba(0, 240, 255, 0.25)' }} />
                     ) : (
@@ -27,7 +27,7 @@ export default function Toolbar({ onRefresh }) {
                             <span className="text-xs font-bold text-gradient">CC</span>
                         </div>
                     )}
-                    <span className="text-sm font-bold text-gradient">CodeChronicle</span>
+                    <span className="text-sm font-bold text-gradient truncate">CodeChronicle</span>
                 </div>
 
                 {graph && (
@@ -43,7 +43,7 @@ export default function Toolbar({ onRefresh }) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                     onClick={onRefresh}
                     disabled={isLoading}

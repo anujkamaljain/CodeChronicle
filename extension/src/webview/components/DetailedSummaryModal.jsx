@@ -82,7 +82,7 @@ export default function DetailedSummaryModal() {
                         {/* Header */}
                         <div className="detailed-modal-header">
                             <div className="detailed-modal-file-info">
-                                <h2 className="detailed-modal-filename">
+                                <h2 className="detailed-modal-filename truncate">
                                     {nodeDetails?.label || 'File Analysis'}
                                 </h2>
                                 <div className="detailed-modal-meta">

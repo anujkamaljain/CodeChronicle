@@ -715,6 +715,8 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .toast-progress {
@@ -1093,6 +1095,9 @@
   margin: 0;
   line-height: 1.3;
   text-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detailed-modal-meta {
@@ -1531,4 +1536,187 @@
   transform: translateY(-1px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   filter: brightness(1.2);
+}
+
+/* ═══════════════════════════════════════════════════
+   Responsive — small viewports (13" laptops, narrow webviews)
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .tab-button {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+  }
+
+  .graph-search-bar {
+    min-width: 200px;
+    max-width: calc(100vw - 120px);
+  }
+
+  .graph-legend {
+    min-width: 110px;
+  }
+
+  .metric-pill {
+    min-width: 56px;
+    padding: 6px 8px;
+  }
+
+  .metric-pill .metric-value {
+    font-size: 1rem;
+  }
+
+  .graph-tooltip {
+    min-width: 150px;
+    max-width: min(220px, calc(100vw - 24px));
+  }
+
+  .detailed-modal {
+    max-width: calc(100vw - 32px);
+  }
+
+  .detailed-modal-header {
+    padding: 14px 16px 10px;
+  }
+
+  .detailed-modal-metrics {
+    padding: 10px 16px;
+  }
+
+  .detailed-modal-metric-chip {
+    min-width: 48px;
+    padding: 4px 8px;
+  }
+
+  .detailed-modal-body {
+    padding: 12px 16px 16px;
+  }
+
+  .rel-modal {
+    max-width: calc(100vw - 32px);
+  }
+
+  .rel-modal-header {
+    padding: 12px 16px;
+  }
+
+  .rel-modal-connection {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rel-modal-arrow-container {
+    min-width: 50px;
+    padding: 0 4px;
+  }
+
+  .rel-modal-body {
+    padding: 12px 16px 16px;
+  }
+
+  .toast {
+    min-width: 200px;
+    max-width: calc(100vw - 32px);
+  }
+
+  .toast-container {
+    right: 8px;
+    bottom: 36px;
+  }
+
+  .ai-progress {
+    padding: 10px 14px;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+  }
+
+  .ai-progress-connector {
+    width: 10px;
+  }
+
+  .graph-controls {
+    bottom: 12px;
+    left: 12px;
+  }
+
+  .skeleton-container {
+    padding: 20px;
+  }
+
+  .skeleton-graph {
+    width: min(280px, 90vw);
+    height: min(200px, 60vw);
+  }
+
+  .skeleton-title {
+    width: min(180px, 80vw);
+  }
+
+  .sidebar-panel-responsive {
+    width: clamp(260px, 35vw, 340px) !important;
+  }
+
+  .tab-help-tooltip {
+    white-space: normal;
+    max-width: min(280px, 80vw);
+  }
+}
+
+@media (max-width: 600px) {
+  .tab-button {
+    padding: 6px 8px;
+    font-size: 0.6875rem;
+    letter-spacing: 0.01em;
+  }
+
+  .graph-search-bar {
+    min-width: 160px;
+    max-width: calc(100vw - 80px);
+    padding: 4px 8px;
+  }
+
+  .graph-search-badge {
+    max-width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .detailed-modal,
+  .rel-modal {
+    max-width: calc(100vw - 16px);
+    border-radius: 12px;
+  }
+
+  .detailed-modal-overlay,
+  .rel-modal-overlay {
+    padding: 8px;
+  }
+
+  .rel-modal-connection {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rel-modal-arrow-container {
+    flex-direction: row;
+    min-width: unset;
+    padding: 4px 0;
+  }
+
+  .rel-modal-arrow-line {
+    flex: 1;
+  }
+
+  .metric-pill {
+    min-width: 48px;
+    padding: 4px 6px;
+  }
+
+  .metric-pill .metric-value {
+    font-size: 0.875rem;
+  }
+
+  .metric-pill .metric-label {
+    font-size: 0.5625rem;
+  }
 }

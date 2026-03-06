@@ -92,8 +92,8 @@ function SkeletonGraph() {
                 })}
             </div>
             <div className="skeleton-title" />
-            <div className="skeleton-bar" style={{ width: 220, animationDelay: '0.4s' }} />
-            <div className="skeleton-bar" style={{ width: 160, animationDelay: '0.6s' }} />
+            <div className="skeleton-bar" style={{ width: 'min(220px, 60vw)', animationDelay: '0.4s' }} />
+            <div className="skeleton-bar" style={{ width: 'min(160px, 45vw)', animationDelay: '0.6s' }} />
         </div>
     );
 }
@@ -299,9 +299,9 @@ export default function App({ vscode }) {
                     </button>
                 ))}
 
-                {/* Node count badge */}
+                {/* Node count badge — hidden on very narrow viewports */}
                 {graph && (
-                    <div className="ml-auto mr-4 flex items-center gap-2">
+                    <div className="ml-auto mr-4 hidden sm:flex items-center gap-2">
                         <span className="text-xs-mono" style={{ color: 'var(--neon-cyan)' }}>
                             {Object.keys(graph.nodes).length}
                         </span>
@@ -364,7 +364,7 @@ export default function App({ vscode }) {
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -slideDirection * 20 }}
                                 transition={{ duration: 0.2, ease: 'easeInOut' }}
-                                className="absolute inset-0 overflow-auto p-4"
+                                className="absolute inset-0 overflow-auto p-2 sm:p-4"
                             >
                                 <QueryPanel
                                     onQuery={handleQuery}
@@ -380,7 +380,7 @@ export default function App({ vscode }) {
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -slideDirection * 20 }}
                                 transition={{ duration: 0.2, ease: 'easeInOut' }}
-                                className="absolute inset-0 overflow-auto p-4"
+                                className="absolute inset-0 overflow-auto p-2 sm:p-4"
                             >
                                 <RiskPanel
                                     graph={graph}
@@ -424,10 +424,10 @@ export default function App({ vscode }) {
                     {sidebarOpen && selectedNode && activeTab === 'graph' && (
                         <motion.div
                             initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 340, opacity: 1 }}
+                            animate={{ width: 'clamp(260px, 30vw, 340px)', opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="border-l overflow-hidden"
+                            className="border-l overflow-hidden sidebar-panel-responsive"
                             style={{ borderColor: 'var(--border-glass)' }}
                         >
                             <FileDetailsPanel

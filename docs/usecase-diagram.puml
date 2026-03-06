@@ -1,0 +1,129 @@
+@startuml CodeChronicle_UseCaseDiagram
+
+left to right direction
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam handwritten false
+
+skinparam usecase {
+  BackgroundColor #131922
+  BorderColor #58a6ff
+  FontColor #e6edf3
+  FontSize 11
+  ArrowColor #8b949e
+  StereotypeFontColor #8b949e
+}
+
+skinparam actor {
+  FontColor #e6edf3
+  BorderColor #58a6ff
+}
+
+skinparam rectangle {
+  BackgroundColor #0d1117
+  BorderColor #30363d
+  FontColor #8b949e
+}
+
+skinparam backgroundColor #0d1117
+skinparam defaultFontColor #e6edf3
+
+' ===== ACTORS =====
+actor "Developer" as Dev
+actor "VS Code" as VSCode
+actor "AWS Backend\n(Bedrock, Lambda,\nDynamoDB)" as AWS
+
+' ===== SYSTEM BOUNDARY =====
+rectangle "CodeChronicle VS Code Extension" {
+
+  ' --- Core Use Cases (Developer directly triggers) ---
+  usecase "UC1: Scan Workspace" as UC1
+  usecase "UC2: View Dependency\nGraph" as UC2
+  usecase "UC4: Predict Blast\nRadius" as UC4
+  usecase "UC5: Ask AI About\nCodebase" as UC5
+  usecase "UC7: View Risk\nDashboard" as UC7
+  usecase "UC8: Open File\nin Editor" as UC8
+  usecase "UC9: Refresh Analysis" as UC9
+  usecase "UC14: Configure\nSettings" as UC14
+  usecase "UC17: Search Nodes\nin Graph" as UC17
+
+  ' --- Extend Use Cases (triggered from within graph/dashboard) ---
+  usecase "UC3: Get File\nSummary" as UC3
+  usecase "UC6: Assess File\nRisk" as UC6
+  usecase "UC10: Get Detailed\nSummary" as UC10
+  usecase "UC11: Analyze File\nRelationship" as UC11
+  usecase "UC12: Export Risk\nReport" as UC12
+
+  ' --- System-triggered ---
+  usecase "UC13: Incremental\nGraph Update" as UC13
+
+  ' --- Configuration sub-cases ---
+  usecase "UC15: Enable/Disable\nCloud AI" as UC15
+  usecase "UC16: Set Exclude\nPatterns" as UC16
+
+  ' --- Backend ---
+  usecase "UC18: Cache AI\nResponses" as UC18
+}
+
+' ===== DEVELOPER ASSOCIATIONS (only directly initiated) =====
+Dev --> UC1
+Dev --> UC2
+Dev --> UC4
+Dev --> UC5
+Dev --> UC7
+Dev --> UC8
+Dev --> UC9
+Dev --> UC14
+Dev --> UC17
+
+' ===== VS CODE ASSOCIATIONS =====
+VSCode --> UC8
+VSCode --> UC13
+
+' ===== AWS BACKEND ASSOCIATIONS =====
+AWS --> UC5
+AWS --> UC10
+AWS --> UC11
+AWS --> UC18
+
+' ===== <<include>> RELATIONSHIPS =====
+UC2 ..> UC1 : <<include>>
+UC5 ..> UC1 : <<include>>
+UC7 ..> UC1 : <<include>>
+UC14 ..> UC15 : <<include>>
+UC14 ..> UC16 : <<include>>
+
+' ===== <<extend>> RELATIONSHIPS =====
+UC3 ..> UC2 : <<extend>>
+UC4 ..> UC2 : <<extend>>
+UC6 ..> UC2 : <<extend>>
+UC11 ..> UC2 : <<extend>>
+UC10 ..> UC3 : <<extend>>
+UC12 ..> UC7 : <<extend>>
+
+' ===== NOTES =====
+note right of UC1
+  Foundation use case.
+  Parses files, builds graph,
+  computes metrics.
+end note
+
+note right of UC5
+  Requires Cloud AI enabled.
+  Uses graph context for
+  accurate answers.
+end note
+
+note right of UC3
+  Falls back to local
+  summary when Cloud
+  AI is disabled.
+end note
+
+note bottom of UC18
+  DynamoDB cache
+  7-day TTL
+end note
+
+@enduml

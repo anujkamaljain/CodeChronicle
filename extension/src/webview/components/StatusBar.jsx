@@ -19,11 +19,11 @@ export default function StatusBar() {
     return (
         <div className="border-t" style={{ borderColor: 'var(--border-glass)', background: 'rgba(5, 10, 20, 0.9)' }}>
             {/* Main status row */}
-            <div className="flex items-center justify-between px-4 py-1.5 text-xs"
+            <div className="flex items-center justify-between px-2 sm:px-4 py-1.5 text-xs gap-2 flex-wrap"
                 style={{ color: 'var(--text-muted)' }}>
 
                 {/* Left: Status */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                     {isLoading ? (
                         <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--risk-medium)' }} />
@@ -43,7 +43,7 @@ export default function StatusBar() {
                 </div>
 
                 {/* Center: Graph stats */}
-                <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-3">
                     {graph && (
                         <>
                             <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>
@@ -64,7 +64,7 @@ export default function StatusBar() {
                 </div>
 
                 {/* Right: Cloud status */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                     <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full"
                             style={{
@@ -82,7 +82,7 @@ export default function StatusBar() {
             </div>
 
             {/* Attribution badges row */}
-            <div className="flex items-center justify-center gap-3 px-4 py-1.5"
+            <div className="flex items-center justify-center gap-3 px-2 sm:px-4 py-1.5 flex-wrap"
                 style={{ borderTop: '1px solid rgba(148, 163, 184, 0.06)' }}>
                 {/* Made with Kiro badge */}
                 <div className="attribution-badge" style={{

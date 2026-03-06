@@ -80,6 +80,7 @@ function MarkdownRenderer({ text }) {
                         overflowX: 'auto',
                         margin: '6px 0',
                         lineHeight: 1.5,
+                        maxWidth: '100%',
                     }}>{codeLines.join('\n')}</pre>
                 );
                 codeLines = [];
@@ -122,7 +123,7 @@ function MarkdownRenderer({ text }) {
         }
     }
 
-    return <div style={{ fontSize: '0.78rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>{elements}</div>;
+    return <div style={{ fontSize: '0.78rem', lineHeight: 1.6, color: 'var(--text-secondary)', overflow: 'hidden' }}>{elements}</div>;
 }
 
 export default function QueryPanel({ onQuery, onOpenFile }) {
@@ -167,7 +168,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
     }, [queryResult]);
 
     return (
-        <div className="h-full flex flex-col gap-4 max-w-3xl mx-auto">
+        <div className="h-full flex flex-col gap-4 max-w-3xl w-full mx-auto">
             {/* Header */}
             <div className="text-center">
                 <h2 className="text-lg font-bold text-gradient mb-1">Ask About Your Codebase</h2>
@@ -179,7 +180,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
             {/* Query input */}
             <form onSubmit={handleSubmit} className="relative">
                 <div className="glass-card p-1" style={{ borderColor: 'rgba(0, 240, 255, 0.15)' }}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                         <textarea
                             ref={inputRef}
                             value={localQuery}
@@ -331,7 +332,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                                                 </span>
                                             )}
                                             {!ref.unresolved && ref.snippet && (
-                                                <span className="text-xs truncate" style={{ color: 'var(--text-muted)', maxWidth: '180px' }}>
+                                                <span className="text-xs truncate hidden sm:inline" style={{ color: 'var(--text-muted)', maxWidth: 'min(180px, 30vw)' }}>
                                                     {ref.snippet}
                                                 </span>
                                             )}

@@ -167,8 +167,8 @@ function GraphTooltip({ data, position }) {
         <div
             className="graph-tooltip"
             style={{
-                left: position.x + 14,
-                top: position.y - 10,
+                left: Math.min(position.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 900) - 280),
+                top: Math.max(position.y - 10, 10),
             }}
         >
             <div className="graph-tooltip-header">

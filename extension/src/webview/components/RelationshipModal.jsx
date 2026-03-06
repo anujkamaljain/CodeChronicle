@@ -38,7 +38,7 @@ function parseSections(text) {
 function FileChip({ node, color }) {
     if (!node) return null;
     return (
-        <div className="rel-modal-file-chip">
+        <div className="rel-modal-file-chip" style={{ minWidth: 0 }}>
             <span className="rel-modal-file-dot" style={{ background: color }} />
             <div className="rel-modal-file-chip-info">
                 <span className="rel-modal-file-chip-name">{node.label}</span>

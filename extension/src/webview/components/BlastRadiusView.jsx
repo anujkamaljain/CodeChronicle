@@ -79,16 +79,16 @@ export default function BlastRadiusView({ graph, onNodeClick, onOpenFile, select
                 className="glass-card p-4 mb-4"
                 style={{ borderColor: 'rgba(168, 85, 247, 0.3)', border: '1px solid rgba(168, 85, 247, 0.3)' }}
             >
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center pulse-ring"
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center pulse-ring flex-shrink-0"
                         style={{ background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
                         <span className="text-lg" style={{ color: 'var(--neon-purple)' }}>◎</span>
                     </div>
-                    <div>
-                        <h3 className="text-sm font-bold" style={{ color: 'var(--neon-purple)' }}>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-bold truncate" style={{ color: 'var(--neon-purple)' }}>
                             Blast Radius: {sourceNode?.label}
                         </h3>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                             {sourceNode?.path}
                         </p>
                     </div>
@@ -96,7 +96,7 @@ export default function BlastRadiusView({ graph, onNodeClick, onOpenFile, select
             </motion.div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <StatCard value={blastData?.directDependents?.length || 0} label="Direct" color="var(--neon-purple)" delay={0} />
                 <StatCard value={blastData?.indirectDependents?.length || 0} label="Indirect" color="var(--neon-orange, #f97316)" delay={0.05} />
                 <StatCard value={totalAffected} label="Total Impact" color="var(--risk-high)" delay={0.1} />

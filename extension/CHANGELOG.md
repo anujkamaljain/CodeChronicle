@@ -2,6 +2,19 @@
 
 All notable changes to the "CodeChronicle" extension will be documented in this file.
 
+## [0.1.4] - 2026-03-06
+
+### Fixed
+
+- **Responsive UI for small screens**: Full responsiveness across 13" MacBooks, narrow laptops, and smaller displays
+  - Sidebar and FileDetailsPanel use flexible widths (`clamp`) instead of fixed 340px
+  - Tab bar, toolbar, status bar, and modals adapt to viewport size
+  - Blast Radius, Risk Map, and Query panels use responsive grids and wrapping
+  - Graph search bar, tooltips, toasts, and AI progress indicator scale correctly
+  - DetailedSummaryModal filename truncates on overflow; toast messages wrap long text
+  - GraphSearchBar match badge truncates on very narrow screens
+  - No horizontal scroll or cut-off content on any supported device size
+
 ## [0.1.3] - 2026-03-06
 
 ### Added

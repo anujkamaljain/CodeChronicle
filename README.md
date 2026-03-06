@@ -1190,6 +1190,10 @@ CodeChronicle uses a **dark glassmorphism design system** with neon accents, bui
 | **Inter** | UI text, labels, descriptions |
 | **JetBrains Mono** | Code snippets, file paths, metrics |
 
+### Responsive Layout
+
+The UI adapts to viewport sizes from 13" laptops to large monitors. Sidebars, modals, grids, and controls scale via CSS media queries and flexible layouts so content stays readable without horizontal overflow.
+
 ---
 
 ## License

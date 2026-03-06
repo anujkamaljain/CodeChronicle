@@ -58,6 +58,11 @@ JavaScript, TypeScript, Python, Java, C/C++, C#, Go, Ruby, PHP, Rust, Swift, Kot
 
 - VS Code 1.85.0 or higher
 - Internet connection for AI features (graph, blast radius, and risk map work offline)
+- Responsive UI: Works on 13" laptops through large monitors (Antigravity, Kiro, VS Code, Cursor)
+
+## Responsive Design
+
+CodeChronicle adapts to all screen sizes — from 13" MacBooks to large desktop monitors. The UI uses flexible layouts, responsive grids, and viewport-aware sizing so nothing gets cut off on smaller displays.
 
 ## Extension Settings
 

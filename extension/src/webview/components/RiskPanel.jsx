@@ -89,7 +89,7 @@ function HealthDashboard({ riskData, graph }) {
                 Codebase Health
             </h4>
 
-            <div className="flex items-center justify-around mb-4">
+            <div className="flex items-center justify-around mb-4 flex-wrap gap-2">
                 <RadialGauge value={stats.healthScore} label="Health Score" color={healthColor} size={72} />
                 <RadialGauge value={riskData.total} max={riskData.total} label="Total Files" color="var(--neon-cyan)" size={64} />
                 <RadialGauge value={stats.avgRisk} label="Avg Risk" color="var(--risk-medium)" size={64} />
@@ -97,25 +97,25 @@ function HealthDashboard({ riskData, graph }) {
 
             <div className="space-y-2">
                 {stats.mostRisky && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <span style={{ color: 'var(--risk-high)' }}>!</span>
-                        <span style={{ color: 'var(--text-muted)' }}>Most risky:</span>
-                        <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+                    <div className="flex items-center gap-2 text-xs min-w-0">
+                        <span className="flex-shrink-0" style={{ color: 'var(--risk-high)' }}>!</span>
+                        <span className="flex-shrink-0" style={{ color: 'var(--text-muted)' }}>Most risky:</span>
+                        <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
                             {stats.mostRisky.label}
                         </span>
-                        <span className="font-mono" style={{ color: 'var(--risk-high)' }}>
+                        <span className="font-mono flex-shrink-0" style={{ color: 'var(--risk-high)' }}>
                             {(stats.mostRisky.riskFactor || stats.mostRisky.localRisk)?.score}/100
                         </span>
                     </div>
                 )}
                 {stats.mostConnected && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <span style={{ color: 'var(--neon-purple)' }}>◉</span>
-                        <span style={{ color: 'var(--text-muted)' }}>Most connected:</span>
-                        <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+                    <div className="flex items-center gap-2 text-xs min-w-0">
+                        <span className="flex-shrink-0" style={{ color: 'var(--neon-purple)' }}>◉</span>
+                        <span className="flex-shrink-0" style={{ color: 'var(--text-muted)' }}>Most connected:</span>
+                        <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
                             {stats.mostConnected.label}
                         </span>
-                        <span className="font-mono" style={{ color: 'var(--neon-purple)' }}>
+                        <span className="font-mono flex-shrink-0" style={{ color: 'var(--neon-purple)' }}>
                             {stats.maxConnections} links
                         </span>
                     </div>
@@ -222,7 +222,7 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
     }
 
     return (
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="max-w-4xl w-full mx-auto space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -295,7 +295,7 @@ export default function RiskPanel({ graph, onNodeClick, onRequestRisk, onOpenFil
                 </div>
 
                 {/* Legend stats */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-3 gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ background: 'var(--risk-high)', boxShadow: '0 0 8px rgba(239, 68, 68, 0.4)' }} />
                         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
