@@ -40,13 +40,14 @@
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     overflow: hidden;
     height: 100vh;
-    width: 100vw;
+    width: 100%;
   }
 
   #root {
     height: 100vh;
-    width: 100vw;
+    width: 100%;
     overflow: hidden;
+    overflow-x: hidden;
   }
 
   /* Scrollbar styling */
@@ -841,7 +842,8 @@
   border: 1px solid rgba(148, 163, 184, 0.12);
   backdrop-filter: blur(16px);
   transition: border-color 0.2s, box-shadow 0.2s;
-  min-width: 280px;
+  min-width: 220px;
+  max-width: calc(100% - 40px);
 }
 
 .graph-search-bar:focus-within {
@@ -1659,6 +1661,32 @@
   .tab-help-tooltip {
     white-space: normal;
     max-width: min(280px, 80vw);
+  }
+}
+
+@media (max-width: 780px) {
+  .tab-button {
+    padding: 8px 10px;
+    font-size: 0.6875rem;
+    letter-spacing: 0.015em;
+  }
+
+  .graph-search-bar {
+    min-width: 180px;
+    max-width: calc(100% - 60px);
+  }
+
+  .graph-legend {
+    min-width: 100px;
+    max-width: 160px;
+  }
+
+  .graph-legend-label {
+    font-size: 0.625rem;
+  }
+
+  .sidebar-panel-responsive {
+    width: clamp(200px, 30vw, 300px) !important;
   }
 }
 

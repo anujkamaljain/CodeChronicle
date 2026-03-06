@@ -271,7 +271,7 @@ export default function App({ vscode }) {
     const aiProgress = useStore((s) => s.aiProgress);
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-grid overflow-hidden"
+        <div className="h-screen w-full flex flex-col bg-grid overflow-hidden"
             style={{ background: 'linear-gradient(180deg, #050a14 0%, #0a1122 50%, #050a14 100%)' }}>
 
             {/* Top toolbar */}
@@ -279,12 +279,12 @@ export default function App({ vscode }) {
 
             {/* Tab bar */}
             <div className="flex items-center border-b"
-                style={{ borderColor: 'var(--border-glass)' }}>
+                style={{ borderColor: 'var(--border-glass)', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
                 {TABS.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`tab-button flex items-center gap-2 ${activeTab === tab.id ? 'active' : ''}`}
+                        className={`tab-button flex items-center gap-1.5 flex-shrink-0 ${activeTab === tab.id ? 'active' : ''}`}
                     >
                         <span className="text-xs opacity-70">{tab.icon}</span>
                         <span className="flex items-center gap-1">
@@ -301,7 +301,7 @@ export default function App({ vscode }) {
 
                 {/* Node count badge — hidden on very narrow viewports */}
                 {graph && (
-                    <div className="ml-auto mr-4 hidden sm:flex items-center gap-2">
+                    <div className="ml-auto mr-4 hidden sm:flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs-mono" style={{ color: 'var(--neon-cyan)' }}>
                             {Object.keys(graph.nodes).length}
                         </span>
@@ -316,9 +316,9 @@ export default function App({ vscode }) {
             </div>
 
             {/* Main content area */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden min-w-0">
                 {/* Main panel */}
-                <div className="flex-1 relative overflow-hidden">
+                <div className="flex-1 relative overflow-hidden min-w-0">
                     <AnimatePresence mode="wait">
                         {activeTab === 'graph' && (
                             <motion.div
@@ -424,10 +424,10 @@ export default function App({ vscode }) {
                     {sidebarOpen && selectedNode && activeTab === 'graph' && (
                         <motion.div
                             initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 'clamp(260px, 30vw, 340px)', opacity: 1 }}
+                            animate={{ width: 'clamp(220px, 28vw, 320px)', opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="border-l overflow-hidden sidebar-panel-responsive"
+                            className="border-l overflow-hidden sidebar-panel-responsive flex-shrink-0"
                             style={{ borderColor: 'var(--border-glass)' }}
                         >
                             <FileDetailsPanel
