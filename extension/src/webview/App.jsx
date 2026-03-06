@@ -279,12 +279,12 @@ export default function App({ vscode }) {
 
             {/* Tab bar */}
             <div className="flex items-center border-b"
-                style={{ borderColor: 'var(--border-glass)', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+                style={{ borderColor: 'var(--border-glass)' }}>
                 {TABS.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`tab-button flex items-center gap-1.5 flex-shrink-0 ${activeTab === tab.id ? 'active' : ''}`}
+                        className={`tab-button flex items-center gap-1.5 ${activeTab === tab.id ? 'active' : ''}`}
                     >
                         <span className="text-xs opacity-70">{tab.icon}</span>
                         <span className="flex items-center gap-1">
