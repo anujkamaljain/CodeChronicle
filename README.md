@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visual-studio-code&style=for-the-badge" alt="VS Code Marketplace" /></a>
   <img src="https://img.shields.io/badge/version-0.1.6-blue?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/500%2B%20users-Trusted-4ade80?style=for-the-badge" alt="500+ trusted users" />
   <img src="https://img.shields.io/badge/JavaScript-ES2023-F7DF1E?logo=javascript&style=for-the-badge" alt="JavaScript" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&style=for-the-badge" alt="React" />
   <img src="https://img.shields.io/badge/AWS-Bedrock%20|%20Lambda%20|%20DynamoDB-FF9900?logo=amazon-aws&style=for-the-badge" alt="AWS" />
@@ -18,6 +19,7 @@
 
 ## Table of Contents
 
+- [Where to Get It](#where-to-get-it)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
@@ -58,9 +60,17 @@
 
 ---
 
+## Where to Get It
+
+You can grab CodeChronicle from the **VS Code Marketplace**, **Kiro**, **Antigravity**, and a few other IDEs that support VS Code extensions. We're working on bringing it to Cursor's marketplace next — should be live there soon.
+
+One more thing we're excited to share: the extension has crossed **500+ downloads** and is trusted by developers across all these platforms. Really appreciate everyone who's tried it so far.
+
+---
+
 ## Overview
 
-CodeChronicle is a VS Code extension designed to help developers understand and safely modify large, complex codebases. It combines **deterministic local static analysis** with **cloud-powered AI reasoning** (Amazon Bedrock) to provide deep codebase insights without leaving your editor.
+CodeChronicle is a VS Code–compatible extension designed to help developers understand and safely modify large, complex codebases. It combines **deterministic local static analysis** with **cloud-powered AI reasoning** (Amazon Bedrock) to provide deep codebase insights without leaving your editor.
 
 The core philosophy is **local-first**: all structural analysis (scanning, parsing, graph building, metrics, blast radius) runs entirely on your machine. Cloud AI features (file summaries, semantic risk scoring, natural language Q&A) are optional and powered by AWS services when enabled.
 
@@ -962,12 +972,12 @@ CodeChronicle/
 
 ### Install from VS Code Marketplace
 
-1. Open VS Code
+1. Open VS Code (or Kiro, Antigravity, or any compatible IDE)
 2. Go to Extensions (`Ctrl+Shift+X`)
 3. Search for **"CodeChronicle"**
 4. Click **Install**
-5. Open the Command Palette (`Ctrl+Shift+P`) and run **CodeChronicle: Show Graph**
-6. Click **Scan Workspace** to analyze your project
+5. Click **Scan Workspace** in the CodeChronicle sidebar to analyze your project
+6. Open the Command Palette (`Ctrl+Shift+P`) and run **CodeChronicle: Show Graph**
 
 Cloud AI features (summaries, risk scoring, natural language Q&A) work out of the box — no configuration needed.
 
@@ -1206,5 +1216,5 @@ MIT
 <p align="center">
   Built with deterministic analysis and AI reasoning.<br/>
   <strong>CodeChronicle</strong> — Understand your code before you change it.<br/><br/>
-  <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle">Install from VS Code Marketplace</a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle">Install from VS Code Marketplace</a> · Available on Kiro, Antigravity & more · Cursor marketplace coming soon
 </p>
