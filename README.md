@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visual-studio-code&style=for-the-badge" alt="VS Code Marketplace" /></a>
+  <img src="https://img.shields.io/badge/version-0.1.6-blue?style=for-the-badge" alt="Version" />
   <img src="https://img.shields.io/badge/JavaScript-ES2023-F7DF1E?logo=javascript&style=for-the-badge" alt="JavaScript" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&style=for-the-badge" alt="React" />
   <img src="https://img.shields.io/badge/AWS-Bedrock%20|%20Lambda%20|%20DynamoDB-FF9900?logo=amazon-aws&style=for-the-badge" alt="AWS" />

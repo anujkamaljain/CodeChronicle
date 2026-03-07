@@ -2,7 +2,9 @@
 // IMPORTANT: Replace this URL after running `npx serverless deploy`
 // in the backend/ folder. The deploy output will give you the URL.
 // ============================================================
-const DEFAULT_API_ENDPOINT = 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com'; // e.g. 'https://abc123.execute-api.us-east-1.amazonaws.com'
+const DEFAULT_API_ENDPOINT = 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
+// 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
+// 'https://usl085fgve.execute-api.us-east-1.amazonaws.com';
 
 /** How long to keep the circuit open after a backend failure (5 min) */
 const CIRCUIT_RESET_MS = 5 * 60 * 1000;
