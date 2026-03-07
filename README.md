@@ -64,6 +64,8 @@
 
 You can grab CodeChronicle from the **VS Code Marketplace**, **Kiro**, **Antigravity**, and a few other IDEs that support VS Code extensions. We're working on bringing it to Cursor's marketplace next — should be live there soon.
 
+**Website:** [https://codechronicle-seven.vercel.app/](https://codechronicle-seven.vercel.app/)
+
 One more thing we're excited to share: the extension has crossed **500+ downloads** and is trusted by developers across all these platforms. Really appreciate everyone who's tried it so far.
 
 ---
