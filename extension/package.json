@@ -82,6 +82,16 @@
         "command": "codechronicle.refreshAnalysis",
         "title": "CodeChronicle: Refresh Analysis",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "codechronicle.login",
+        "title": "CodeChronicle: Sign In",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "codechronicle.logout",
+        "title": "CodeChronicle: Sign Out",
+        "icon": "$(sign-out)"
       }
     ],
     "menus": {

@@ -13,7 +13,13 @@ provider:
     BEDROCK_MODEL_ID: us.amazon.nova-premier-v1:0
     SUMMARIES_TABLE: ${self:service}-summaries-${self:provider.stage}
     RISKS_TABLE: ${self:service}-risks-${self:provider.stage}
+    USERS_TABLE: ${self:service}-users-${self:provider.stage}
     STAGE: ${self:provider.stage}
+    JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-production-use-ssm'}
+    JWT_EXPIRY: '7d'
+    BREVO_API_KEY: ${env:BREVO_API_KEY, ''}
+    BREVO_SENDER_EMAIL: ${env:BREVO_SENDER_EMAIL, 'noreply@codechronicle.dev'}
+    BREVO_SENDER_NAME: 'CodeChronicle'
   iam:
     role:
       statements:
@@ -38,6 +44,7 @@ provider:
           Resource:
             - !GetAtt SummariesTable.Arn
             - !GetAtt RisksTable.Arn
+            - !GetAtt UsersTable.Arn
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
@@ -48,6 +55,48 @@ provider:
     cors: true
 
 functions:
+  # ─── Auth Functions ───────────────────────────────────
+  authRegister:
+    handler: lambda/authHandler.register
+    events:
+      - httpApi:
+          path: /auth/register
+          method: POST
+    timeout: 29
+
+  authLogin:
+    handler: lambda/authHandler.login
+    events:
+      - httpApi:
+          path: /auth/login
+          method: POST
+    timeout: 29
+
+  authVerifyEmail:
+    handler: lambda/authHandler.verifyEmail
+    events:
+      - httpApi:
+          path: /auth/verify-email
+          method: POST
+    timeout: 29
+
+  authResendCode:
+    handler: lambda/authHandler.resendCode
+    events:
+      - httpApi:
+          path: /auth/resend-code
+          method: POST
+    timeout: 29
+
+  authVerifyToken:
+    handler: lambda/authHandler.verifyTokenHandler
+    events:
+      - httpApi:
+          path: /auth/verify-token
+          method: POST
+    timeout: 29
+
+  # ─── AI Functions ─────────────────────────────────────
   aiExplain:
     handler: lambda/aiHandler.explain
     events:
@@ -90,6 +139,21 @@ functions:
 
 resources:
   Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USERS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
     SummariesTable:
       Type: AWS::DynamoDB::Table
       Properties:

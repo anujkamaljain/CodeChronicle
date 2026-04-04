@@ -10,6 +10,8 @@ const { CacheManager } = require('./utils/cacheManager');
 const { FileWatcher } = require('./utils/fileWatcher');
 const { GraphWebviewProvider } = require('./webview/WebviewProvider');
 const { APIClient } = require('./ai/apiClient');
+const { AuthService } = require('./auth/authService');
+const { AuthWebviewProvider } = require('./auth/authWebviewProvider');
 
 /** @type {vscode.StatusBarItem} */
 let statusBarItem;
@@ -17,6 +19,10 @@ let statusBarItem;
 let webviewProvider;
 /** @type {FileWatcher} */
 let fileWatcher;
+/** @type {AuthService} */
+let authService;
+/** @type {AuthWebviewProvider} */
+let authWebviewProvider;
 
 // Shared state
 const state = {
@@ -32,12 +38,25 @@ const state = {
 };
 
 /**
- * @param {vscode.ExtensionContext} context
+ * Enforce authentication before executing any protected command.
+ * Shows the auth webview if the user is not authenticated.
+ * @returns {boolean} true if authenticated
  */
-function activate(context) {
-    console.log('CodeChronicle is activating...');
+function requireAuth() {
+    if (authService && authService.isAuthenticated) {
+        return true;
+    }
+    vscode.window.showWarningMessage('CodeChronicle: Please sign in to use this feature.');
+    if (authWebviewProvider) {
+        authWebviewProvider.show();
+    }
+    return false;
+}
 
-    // Initialize core components
+/**
+ * Initialise core analysis components — only called after authentication.
+ */
+function initCoreComponents(context) {
     const config = vscode.workspace.getConfiguration('codechronicle');
     state.scanner = new WorkspaceScanner(config);
     state.parser = new DependencyParser();
@@ -47,32 +66,10 @@ function activate(context) {
     state.cacheManager = new CacheManager(context.globalStorageUri);
     state.apiClient = new APIClient(config);
 
-    // Status bar
-    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    statusBarItem.command = 'codechronicle.showGraph';
-    updateStatusBar('ready');
-    statusBarItem.show();
-    context.subscriptions.push(statusBarItem);
-
-    // Webview provider (used for sidebar updates when graph changes)
     webviewProvider = new GraphWebviewProvider(context.extensionUri, state);
 
-    // Sidebar view provider (Activity Bar panel)
-    const sidebarProvider = new SidebarViewProvider(context.extensionUri);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('codechronicle.welcome', sidebarProvider)
-    );
-
-    // Register commands
-    context.subscriptions.push(
-        vscode.commands.registerCommand('codechronicle.scanWorkspace', () => scanWorkspace()),
-        vscode.commands.registerCommand('codechronicle.showGraph', () => showGraph(context)),
-        vscode.commands.registerCommand('codechronicle.askAI', () => askAI()),
-        vscode.commands.registerCommand('codechronicle.predictBlastRadius', () => predictBlastRadius()),
-        vscode.commands.registerCommand('codechronicle.refreshAnalysis', () => refreshAnalysis()),
-    );
-
     // File watcher for incremental updates
+    if (fileWatcher) fileWatcher.stop();
     fileWatcher = new FileWatcher(state, (updatedGraph) => {
         state.graph = updatedGraph;
         if (webviewProvider) {
@@ -81,13 +78,118 @@ function activate(context) {
         updateStatusBar('ready');
     });
     fileWatcher.start();
-    context.subscriptions.push({ dispose: () => fileWatcher.stop() });
 
-    // Try loading cached graph
     loadCachedGraph();
-
-    // Check cloud AI connectivity in the background
     checkCloudStatus();
+}
+
+/**
+ * @param {vscode.ExtensionContext} context
+ */
+function activate(context) {
+    console.log('CodeChronicle is activating...');
+
+    // ─── Auth Setup ──────────────────────────────────────
+    const config = vscode.workspace.getConfiguration('codechronicle');
+    const apiEndpoint = config.get('awsApiEndpoint') || 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
+
+    authService = new AuthService(context, apiEndpoint);
+    authWebviewProvider = new AuthWebviewProvider(context, authService);
+
+    // Status bar
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusBarItem.command = 'codechronicle.showGraph';
+    updateStatusBar('locked');
+    statusBarItem.show();
+    context.subscriptions.push(statusBarItem);
+
+    // Sidebar view provider (Activity Bar panel) — shows login prompt if not authenticated
+    const sidebarProvider = new SidebarViewProvider(context.extensionUri, authService);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('codechronicle.welcome', sidebarProvider)
+    );
+
+    // Register commands — all gated behind auth
+    context.subscriptions.push(
+        vscode.commands.registerCommand('codechronicle.scanWorkspace', () => {
+            if (!requireAuth()) return;
+            scanWorkspace();
+        }),
+        vscode.commands.registerCommand('codechronicle.showGraph', () => {
+            if (!requireAuth()) return;
+            showGraph(context);
+        }),
+        vscode.commands.registerCommand('codechronicle.askAI', () => {
+            if (!requireAuth()) return;
+            askAI();
+        }),
+        vscode.commands.registerCommand('codechronicle.predictBlastRadius', () => {
+            if (!requireAuth()) return;
+            predictBlastRadius();
+        }),
+        vscode.commands.registerCommand('codechronicle.refreshAnalysis', () => {
+            if (!requireAuth()) return;
+            refreshAnalysis();
+        }),
+        vscode.commands.registerCommand('codechronicle.login', () => {
+            authWebviewProvider.show();
+        }),
+        vscode.commands.registerCommand('codechronicle.logout', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'CodeChronicle: Are you sure you want to sign out?',
+                { modal: true },
+                'Sign Out'
+            );
+            if (confirm === 'Sign Out') {
+                await authService.logout();
+                vscode.window.showInformationMessage('CodeChronicle: Signed out successfully.');
+            }
+        }),
+    );
+
+    // ─── Auth State Change Listener ──────────────────────
+    authService.onAuthStateChanged((event) => {
+        if (event.authenticated) {
+            console.log('CodeChronicle: User authenticated —', event.user?.email);
+            updateStatusBar('ready');
+            // Initialise core components now that user is authenticated
+            if (!state.scanner) {
+                initCoreComponents(context);
+            }
+            vscode.window.showInformationMessage(
+                `CodeChronicle: Welcome${event.user?.name ? ', ' + event.user.name : ''}!`
+            );
+        } else {
+            console.log('CodeChronicle: User signed out.');
+            updateStatusBar('locked');
+            // Stop file watcher when logged out
+            if (fileWatcher) {
+                fileWatcher.stop();
+                fileWatcher = null;
+            }
+            state.graph = null;
+            state.scanner = null;
+        }
+    });
+
+    // ─── Check existing auth on startup ──────────────────
+    authService.initialise().then((isAuthenticated) => {
+        if (isAuthenticated) {
+            console.log('CodeChronicle: Restored session for', authService.user?.email);
+            initCoreComponents(context);
+            updateStatusBar('ready');
+        } else {
+            console.log('CodeChronicle: No valid session found. Showing auth screen.');
+            updateStatusBar('locked');
+            // Auto-show auth panel on first startup if not authenticated
+            authWebviewProvider.show();
+        }
+    });
+
+    context.subscriptions.push({ dispose: () => {
+        if (fileWatcher) fileWatcher.stop();
+        if (authWebviewProvider) authWebviewProvider.dispose();
+    }});
 
     console.log('CodeChronicle activated successfully!');
 }
@@ -968,10 +1070,18 @@ function updateStatusBar(status) {
             statusBarItem.tooltip = 'Scanning workspace files';
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
             break;
-        case 'ready':
+        case 'ready': {
             const nodeCount = state.graph ? Object.keys(state.graph.nodes).length : 0;
+            const userName = authService?.user?.name || authService?.user?.email || '';
             statusBarItem.text = `$(type-hierarchy) CodeChronicle${nodeCount > 0 ? `: ${nodeCount} files` : ''}`;
-            statusBarItem.tooltip = 'Click to open CodeChronicle graph';
+            statusBarItem.tooltip = `Click to open CodeChronicle graph${userName ? '\nSigned in as ' + userName : ''}`;
+            statusBarItem.backgroundColor = undefined;
+            break;
+        }
+        case 'locked':
+            statusBarItem.text = '$(lock) CodeChronicle: Sign In';
+            statusBarItem.tooltip = 'Click to sign in to CodeChronicle';
+            statusBarItem.command = 'codechronicle.login';
             statusBarItem.backgroundColor = undefined;
             break;
         case 'error':
@@ -1014,20 +1124,91 @@ function getNonce() {
 }
 
 class SidebarViewProvider {
-    constructor(extensionUri) {
+    constructor(extensionUri, authSvc) {
         this.extensionUri = extensionUri;
+        this._authService = authSvc;
     }
 
     resolveWebviewView(webviewView) {
+        this._view = webviewView;
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'assets')],
         };
 
+        this._renderSidebar(webviewView);
+
+        // Re-render when auth state changes
+        if (this._authService) {
+            this._authService.onAuthStateChanged(() => {
+                this._renderSidebar(webviewView);
+            });
+        }
+
+        webviewView.webview.onDidReceiveMessage((message) => {
+            if (message.command) {
+                vscode.commands.executeCommand(message.command);
+            }
+        });
+    }
+
+    _renderSidebar(webviewView) {
         const iconUri = webviewView.webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'assets', 'icon.png')
         );
 
+        const isAuth = this._authService?.isAuthenticated;
+        const userName = this._authService?.user?.name || this._authService?.user?.email || '';
+
+        if (!isAuth) {
+            // Show locked sidebar with login button
+            webviewView.webview.html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    padding: 16px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo { width: 64px; height: 64px; border-radius: 12px; margin-bottom: 4px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  p { margin: 0; font-size: 12px; opacity: 0.75; text-align: center; line-height: 1.5; }
+  .lock-icon { font-size: 28px; margin: 12px 0 4px; opacity: 0.6; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 10px 12px; margin-top: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; border-radius: 6px;
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+  }
+  .btn:hover { background: var(--vscode-button-hoverBackground); }
+</style>
+</head>
+<body>
+  <img src="${iconUri}" alt="CodeChronicle" class="logo" />
+  <h2>CodeChronicle</h2>
+  <div class="lock-icon">🔒</div>
+  <p>Sign in to unlock AI-powered codebase analysis, dependency graphs, and more.</p>
+  <button class="btn" onclick="run('codechronicle.login')">Sign In to CodeChronicle</button>
+  <script>
+    const vscode = acquireVsCodeApi();
+    function run(cmd) { vscode.postMessage({ command: cmd }); }
+  </script>
+</body>
+</html>`;
+            return;
+        }
+
+        // Show full sidebar when authenticated
         webviewView.webview.html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1046,6 +1227,12 @@ class SidebarViewProvider {
   .logo { width: 64px; height: 64px; border-radius: 12px; margin-bottom: 4px; }
   h2 { margin: 0; font-size: 15px; font-weight: 600; }
   p { margin: 0; font-size: 12px; opacity: 0.75; text-align: center; line-height: 1.5; }
+  .user-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; padding: 4px 10px; border-radius: 12px;
+    background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+    margin-bottom: 4px;
+  }
   .btn {
     display: flex; align-items: center; justify-content: center; gap: 6px;
     width: 100%; padding: 8px 12px; margin-top: 4px;
@@ -1069,11 +1256,17 @@ class SidebarViewProvider {
   }
   .cmd-item:hover { background: var(--vscode-list-hoverBackground); opacity: 1; }
   .kbd { font-size: 10px; opacity: 0.5; margin-left: auto; font-family: var(--vscode-editor-font-family); }
+  .logout-link {
+    font-size: 11px; opacity: 0.5; cursor: pointer; margin-top: 8px;
+    background: none; border: none; color: var(--vscode-foreground);
+  }
+  .logout-link:hover { opacity: 0.85; text-decoration: underline; }
 </style>
 </head>
 <body>
   <img src="${iconUri}" alt="CodeChronicle" class="logo" />
   <h2>CodeChronicle</h2>
+  <div class="user-badge">✓ ${userName}</div>
   <p>AI-powered codebase analysis with dependency graphs, blast radius prediction, and natural language exploration.</p>
 
   <button class="btn" onclick="run('codechronicle.scanWorkspace')">Scan Workspace</button>
@@ -1094,18 +1287,14 @@ class SidebarViewProvider {
     </div>
   </div>
 
+  <button class="logout-link" onclick="run('codechronicle.logout')">Sign Out</button>
+
   <script>
     const vscode = acquireVsCodeApi();
     function run(cmd) { vscode.postMessage({ command: cmd }); }
   </script>
 </body>
 </html>`;
-
-        webviewView.webview.onDidReceiveMessage((message) => {
-            if (message.command) {
-                vscode.commands.executeCommand(message.command);
-            }
-        });
     }
 }
 
