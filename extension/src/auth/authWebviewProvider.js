@@ -730,11 +730,11 @@ class AuthWebviewProvider {
       <!-- ═══════════════════════════════════════ -->
       <div id="page-auth" class="page active">
         <div class="auth-tabs">
-          <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-          <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Create Account</button>
+          <button class="auth-tab active" id="tab-login" type="button">Sign In</button>
+          <button class="auth-tab" id="tab-register" type="button">Create Account</button>
         </div>
 
-        <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+        <form id="auth-form">
           <!-- Name (register only) -->
           <div class="form-group" id="field-name" style="display:none">
             <label class="form-label" for="input-name">Full Name</label>
@@ -752,7 +752,7 @@ class AuthWebviewProvider {
             <label class="form-label" for="input-password">Password</label>
             <div class="password-wrapper">
               <input class="form-input" id="input-password" type="password" placeholder="••••••••" autocomplete="current-password" required minlength="8">
-              <button type="button" class="password-toggle" onclick="togglePassword()" id="pwd-toggle" aria-label="Toggle password visibility">👁</button>
+              <button type="button" class="password-toggle" id="pwd-toggle" aria-label="Toggle password visibility">👁</button>
             </div>
             <div id="pwd-strength-container" style="display:none">
               <div class="pwd-strength">
@@ -791,17 +791,17 @@ class AuthWebviewProvider {
           <input class="otp-input" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="5">
         </div>
 
-        <button class="auth-btn" id="verify-btn" onclick="handleVerifySubmit()" disabled>
+        <button class="auth-btn" id="verify-btn" type="button" disabled>
           <span id="verify-btn-text">Verify Email</span>
         </button>
 
         <div class="resend-row">
           Didn't receive the code?
-          <button class="auth-link" onclick="handleResendCode()">Resend</button>
+          <button class="auth-link" id="resend-btn" type="button">Resend</button>
         </div>
 
         <div style="text-align:center;margin-top:12px;">
-          <button class="auth-link" onclick="goBackToAuth()">← Back to Sign In</button>
+          <button class="auth-link" id="back-to-auth-btn" type="button">← Back to Sign In</button>
         </div>
       </div>
 
@@ -873,6 +873,14 @@ class AuthWebviewProvider {
       if (!email || !password) {
         showAlert('error', 'Please fill in all required fields.');
         return;
+      }
+
+      if (currentMode === 'register') {
+        const pwdError = validatePasswordRequirements(password);
+        if (pwdError) {
+          showAlert('error', pwdError);
+          return;
+        }
       }
 
       clearAlert();
@@ -984,6 +992,15 @@ class AuthWebviewProvider {
     }
 
     // ── Password strength meter ──────────────────────────
+    function validatePasswordRequirements(pwd) {
+      if (pwd.length < 8) return 'Password must be at least 8 characters.';
+      if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter.';
+      if (!/[a-z]/.test(pwd)) return 'Password must contain at least one lowercase letter.';
+      if (!/[0-9]/.test(pwd)) return 'Password must contain at least one digit.';
+      if (!/[^A-Za-z0-9]/.test(pwd)) return 'Password must contain at least one special character.';
+      return null;
+    }
+
     function computePasswordStrength(pwd) {
       let score = 0;
       if (pwd.length >= 8) score++;
@@ -1108,6 +1125,14 @@ class AuthWebviewProvider {
     });
 
     // ── Init ─────────────────────────────────────────────
+    document.getElementById('tab-login').addEventListener('click', () => switchTab('login'));
+    document.getElementById('tab-register').addEventListener('click', () => switchTab('register'));
+    document.getElementById('auth-form').addEventListener('submit', handleAuthSubmit);
+    document.getElementById('pwd-toggle').addEventListener('click', togglePassword);
+    document.getElementById('verify-btn').addEventListener('click', handleVerifySubmit);
+    document.getElementById('resend-btn').addEventListener('click', handleResendCode);
+    document.getElementById('back-to-auth-btn').addEventListener('click', goBackToAuth);
+
     setupOtpInputs();
     document.getElementById('input-email').focus();
   </script>

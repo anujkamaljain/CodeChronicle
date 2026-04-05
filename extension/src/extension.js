@@ -176,7 +176,9 @@ function activate(context) {
     authService.initialise().then((isAuthenticated) => {
         if (isAuthenticated) {
             console.log('CodeChronicle: Restored session for', authService.user?.email);
-            initCoreComponents(context);
+            if (!state.scanner) {
+                initCoreComponents(context);
+            }
             updateStatusBar('ready');
         } else {
             console.log('CodeChronicle: No valid session found. Showing auth screen.');
@@ -1075,6 +1077,7 @@ function updateStatusBar(status) {
             const userName = authService?.user?.name || authService?.user?.email || '';
             statusBarItem.text = `$(type-hierarchy) CodeChronicle${nodeCount > 0 ? `: ${nodeCount} files` : ''}`;
             statusBarItem.tooltip = `Click to open CodeChronicle graph${userName ? '\nSigned in as ' + userName : ''}`;
+            statusBarItem.command = 'codechronicle.showGraph';
             statusBarItem.backgroundColor = undefined;
             break;
         }
@@ -1161,6 +1164,8 @@ class SidebarViewProvider {
         const isAuth = this._authService?.isAuthenticated;
         const userName = this._authService?.user?.name || this._authService?.user?.email || '';
 
+        const nonce = getNonce();
+
         if (!isAuth) {
             // Show locked sidebar with login button
             webviewView.webview.html = `<!DOCTYPE html>
@@ -1168,6 +1173,7 @@ class SidebarViewProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webviewView.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webviewView.webview.cspSource};">
 <style>
   body {
     padding: 16px;
@@ -1198,10 +1204,12 @@ class SidebarViewProvider {
   <h2>CodeChronicle</h2>
   <div class="lock-icon">🔒</div>
   <p>Sign in to unlock AI-powered codebase analysis, dependency graphs, and more.</p>
-  <button class="btn" onclick="run('codechronicle.login')">Sign In to CodeChronicle</button>
-  <script>
+  <button class="btn" id="login-btn" type="button">Sign In to CodeChronicle</button>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    function run(cmd) { vscode.postMessage({ command: cmd }); }
+    document.getElementById('login-btn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'codechronicle.login' });
+    });
   </script>
 </body>
 </html>`;
@@ -1214,6 +1222,7 @@ class SidebarViewProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webviewView.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webviewView.webview.cspSource};">
 <style>
   body {
     padding: 16px;
@@ -1269,29 +1278,35 @@ class SidebarViewProvider {
   <div class="user-badge">✓ ${userName}</div>
   <p>AI-powered codebase analysis with dependency graphs, blast radius prediction, and natural language exploration.</p>
 
-  <button class="btn" onclick="run('codechronicle.scanWorkspace')">Scan Workspace</button>
-  <button class="btn btn-secondary" onclick="run('codechronicle.showGraph')">Open Graph View</button>
+  <button class="btn" id="scan-btn" type="button">Scan Workspace</button>
+  <button class="btn btn-secondary" id="graph-btn" type="button">Open Graph View</button>
 
   <div class="divider"></div>
 
   <div class="commands">
-    <div class="cmd-item" onclick="run('codechronicle.askAI')">
+    <div class="cmd-item" id="ask-ai-btn">
       <span>Ask AI About Codebase</span>
       <span class="kbd">Ctrl+Shift+P</span>
     </div>
-    <div class="cmd-item" onclick="run('codechronicle.predictBlastRadius')">
+    <div class="cmd-item" id="blast-btn">
       <span>Predict Blast Radius</span>
     </div>
-    <div class="cmd-item" onclick="run('codechronicle.refreshAnalysis')">
+    <div class="cmd-item" id="refresh-btn">
       <span>Refresh Analysis</span>
     </div>
   </div>
 
-  <button class="logout-link" onclick="run('codechronicle.logout')">Sign Out</button>
+  <button class="logout-link" id="logout-btn" type="button">Sign Out</button>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     function run(cmd) { vscode.postMessage({ command: cmd }); }
+    document.getElementById('scan-btn').addEventListener('click', () => run('codechronicle.scanWorkspace'));
+    document.getElementById('graph-btn').addEventListener('click', () => run('codechronicle.showGraph'));
+    document.getElementById('ask-ai-btn').addEventListener('click', () => run('codechronicle.askAI'));
+    document.getElementById('blast-btn').addEventListener('click', () => run('codechronicle.predictBlastRadius'));
+    document.getElementById('refresh-btn').addEventListener('click', () => run('codechronicle.refreshAnalysis'));
+    document.getElementById('logout-btn').addEventListener('click', () => run('codechronicle.logout'));
   </script>
 </body>
 </html>`;

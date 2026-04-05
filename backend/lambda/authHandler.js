@@ -336,7 +336,7 @@ module.exports.verifyEmail = async (event) => {
 
         // Check code expiry
         if (Date.now() > user.codeExpiry) {
-            return respond(410, { error: 'Verification code has expired. Please register again.' });
+            return respond(410, { error: 'Verification code has expired. Please request a new code.' });
         }
 
         // Validate code (timing-safe comparison)
