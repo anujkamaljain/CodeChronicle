@@ -106,7 +106,7 @@ module.exports.submitQueryJob = async (event) => {
         });
     } catch (err) {
         console.error('submitQueryJob error:', err);
-        return response(500, { error: 'Failed to enqueue query job.', details: err.message });
+        return response(500, { error: 'Failed to enqueue query job. Please try again later.' });
     }
 };
 
@@ -146,7 +146,7 @@ module.exports.getJobStatus = async (event) => {
         });
     } catch (err) {
         console.error('getJobStatus error:', err);
-        return response(500, { error: 'Failed to fetch job status.', details: err.message });
+        return response(500, { error: 'Failed to fetch job status. Please try again later.' });
     }
 };
 
@@ -174,8 +174,10 @@ module.exports.processQueryJob = async (event) => {
                 TableName: AI_JOBS_TABLE,
                 Key: { jobId },
                 UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
+                ConditionExpression: 'attribute_exists(jobId) AND #status = :queued',
                 ExpressionAttributeNames: { '#status': 'status' },
                 ExpressionAttributeValues: {
+                    ':queued': 'queued',
                     ':status': 'processing',
                     ':updatedAt': nowIso,
                 },
@@ -192,7 +194,7 @@ module.exports.processQueryJob = async (event) => {
                     metadata: { queryLength: query.length, maxTokens: AI_QUERY_MAX_TOKENS },
                 });
             } catch (billingErr) {
-                if (billingErr.name === 'ConditionalCheckFailedException') {
+                if (billingErr.name === 'ConditionalCheckFailedException' || billingErr.name === 'TransactionCanceledException') {
                     throw new Error('Insufficient credits. Please buy more credits to continue.');
                 }
                 throw billingErr;
@@ -255,6 +257,11 @@ module.exports.processQueryJob = async (event) => {
                 },
             }));
         } catch (err) {
+            if (err.name === 'ConditionalCheckFailedException') {
+                // Already processed or no longer queued; avoid duplicate charging on SQS retries.
+                console.warn(`Skipping duplicate/non-queued job ${jobId}.`);
+                continue;
+            }
             console.error(`processQueryJob error for ${jobId}:`, err);
             await dynamoClient.send(new UpdateCommand({
                 TableName: AI_JOBS_TABLE,
@@ -267,7 +274,8 @@ module.exports.processQueryJob = async (event) => {
                     ':updatedAt': new Date().toISOString(),
                 },
             }));
-            throw err;
+            // Job is now terminally marked as failed; don't rethrow and trigger duplicate SQS redelivery.
+            continue;
         }
     }
 };

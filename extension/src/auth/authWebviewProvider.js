@@ -87,7 +87,10 @@ class AuthWebviewProvider {
                         email: message.data.email,
                     });
                 } else {
-                    this._postMessage({ type: 'error', message: result.error });
+                    this._postMessage({
+                        type: 'error',
+                        message: `${result.error}${String(result.error || '').includes('Internal server error') ? ' If this is your first attempt, wait 2-3 seconds and retry; account creation may have partially completed.' : ''}`,
+                    });
                 }
                 break;
             }

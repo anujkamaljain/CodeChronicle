@@ -20,6 +20,7 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'noreply@codechronicle.dev';
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'CodeChronicle';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const VERIFICATION_CODE_EXPIRY_MINUTES = 15;
 const BCRYPT_SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -33,7 +34,7 @@ const docClient = DynamoDBDocumentClient.from(ddbClient, {
 
 // ─── CORS Headers ────────────────────────────────────────────────
 const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Content-Type': 'application/json',
@@ -109,7 +110,7 @@ function signToken(payload) {
  */
 function verifyToken(token) {
     try {
-        return jwt.verify(token, JWT_SECRET);
+        return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     } catch {
         return null;
     }
@@ -281,23 +282,31 @@ module.exports.register = async (event) => {
         const codeExpiry = Date.now() + VERIFICATION_CODE_EXPIRY_MINUTES * 60 * 1000;
 
         // Store user
-        await docClient.send(
-            new PutCommand({
-                TableName: USERS_TABLE,
-                Item: {
-                    email: sanitizedEmail,
-                    password: hashedPassword,
-                    name: (name || '').trim() || null,
-                    emailVerified: false,
-                    verificationCode: code,
-                    codeExpiry,
-                    loginAttempts: 0,
-                    lockoutUntil: 0,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                },
-            })
-        );
+        try {
+            await docClient.send(
+                new PutCommand({
+                    TableName: USERS_TABLE,
+                    Item: {
+                        email: sanitizedEmail,
+                        password: hashedPassword,
+                        name: (name || '').trim() || null,
+                        emailVerified: false,
+                        verificationCode: code,
+                        codeExpiry,
+                        loginAttempts: 0,
+                        lockoutUntil: 0,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                    ConditionExpression: 'attribute_not_exists(email)',
+                })
+            );
+        } catch (putErr) {
+            if (putErr.name === 'ConditionalCheckFailedException') {
+                return respond(409, { error: 'An account with this email already exists.' });
+            }
+            throw putErr;
+        }
 
         await ensureUserWallet(sanitizedEmail);
 
@@ -438,29 +447,44 @@ module.exports.login = async (event) => {
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            const newAttempts = (user.loginAttempts || 0) + 1;
-            const updates = {
-                ':a': newAttempts,
-                ':now': new Date().toISOString(),
-            };
-            let updateExpr = 'SET loginAttempts = :a, updatedAt = :now';
-
-            // Lock account after MAX_LOGIN_ATTEMPTS
-            if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-                updates[':lock'] = Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000;
-                updateExpr += ', lockoutUntil = :lock';
-            }
-
-            await docClient.send(
+            const nowMs = Date.now();
+            const nowIso = new Date(nowMs).toISOString();
+            const attemptUpdate = await docClient.send(
                 new UpdateCommand({
                     TableName: USERS_TABLE,
                     Key: { email: sanitizedEmail },
-                    UpdateExpression: updateExpr,
-                    ExpressionAttributeValues: updates,
+                    UpdateExpression: 'SET loginAttempts = if_not_exists(loginAttempts, :zero) + :inc, updatedAt = :now',
+                    ExpressionAttributeValues: {
+                        ':zero': 0,
+                        ':inc': 1,
+                        ':now': nowIso,
+                    },
+                    ReturnValues: 'ALL_NEW',
                 })
             );
 
+            const newAttempts = Number(attemptUpdate.Attributes?.loginAttempts || ((user.loginAttempts || 0) + 1));
             if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+                const lockUntil = nowMs + LOCKOUT_DURATION_MINUTES * 60 * 1000;
+                try {
+                    await docClient.send(
+                        new UpdateCommand({
+                            TableName: USERS_TABLE,
+                            Key: { email: sanitizedEmail },
+                            UpdateExpression: 'SET lockoutUntil = :lock, updatedAt = :now',
+                            ConditionExpression: 'attribute_not_exists(lockoutUntil) OR lockoutUntil < :nowMs',
+                            ExpressionAttributeValues: {
+                                ':lock': lockUntil,
+                                ':now': nowIso,
+                                ':nowMs': nowMs,
+                            },
+                        })
+                    );
+                } catch (lockErr) {
+                    if (lockErr.name !== 'ConditionalCheckFailedException') {
+                        throw lockErr;
+                    }
+                }
                 return respond(429, {
                     error: `Too many failed attempts. Account locked for ${LOCKOUT_DURATION_MINUTES} minutes.`,
                 });

@@ -76,6 +76,13 @@ export default function GraphSearchBar({ cyRef }) {
                 placeholder="Search files... (Ctrl+F)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                        setSearchQuery('');
+                        inputRef.current?.blur();
+                    }
+                }}
+                aria-label="Search files in dependency graph"
             />
             {searchQuery && (
                 <>
@@ -85,6 +92,8 @@ export default function GraphSearchBar({ cyRef }) {
                     <button
                         className="graph-search-clear"
                         onClick={() => setSearchQuery('')}
+                        aria-label="Clear graph search"
+                        title="Clear search (Esc)"
                     >
                         ✕
                     </button>

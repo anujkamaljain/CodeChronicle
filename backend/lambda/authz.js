@@ -26,7 +26,7 @@ function getBearerToken(event) {
 
 function verifyJwt(token) {
     try {
-        return jwt.verify(token, JWT_SECRET);
+        return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     } catch {
         return null;
     }

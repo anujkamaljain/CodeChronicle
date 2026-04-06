@@ -99,6 +99,17 @@ class AuthService {
             const result = await this._apiRequest('/auth/register', credentials);
             return { success: true, message: result.message };
         } catch (err) {
+            // Registration can succeed server-side but first response may fail
+            // due to cold starts/network jitter. Retry once for robustness.
+            if (this._isTransientError(err)) {
+                try {
+                    await this._sleep(900);
+                    const retry = await this._apiRequest('/auth/register', credentials);
+                    return { success: true, message: retry.message };
+                } catch (retryErr) {
+                    return { success: false, error: retryErr.message };
+                }
+            }
             return { success: false, error: err.message };
         }
     }
@@ -238,7 +249,7 @@ class AuthService {
     async _apiRequest(path, body) {
         const url = `${this._apiEndpoint}${path}`;
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), 25000);
 
         try {
             const response = await fetch(url, {
@@ -271,6 +282,18 @@ class AuthService {
             }
             throw err;
         }
+    }
+
+    _isTransientError(err) {
+        if (!err) return false;
+        if (err.name === 'AbortError') return true;
+        if (typeof err.statusCode === 'number' && err.statusCode >= 500) return true;
+        const msg = String(err.message || '').toLowerCase();
+        return msg.includes('timed out') || msg.includes('network') || msg.includes('fetch');
+    }
+
+    _sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
 

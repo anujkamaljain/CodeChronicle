@@ -2,6 +2,29 @@
 
 All notable changes to the "CodeChronicle" extension will be documented in this file.
 
+## [0.1.7] - 2026-04-07
+
+### Added
+
+- Buy Credits action in extension status bar with smart website redirect:
+  - Authenticated users -> `/billing`
+  - Unauthenticated users -> `/login` then billing
+- Dedicated query in-flight guard to prevent concurrent duplicate AI queries.
+- Summary in-flight guard to prevent duplicate summary calls per node.
+
+### Changed
+
+- Query panel UX: disables submit/input while a query is running and adds clearer waiting state.
+- Credit and cloud-fallback handling improved for clearer user-facing messages.
+- Error display scrubbed in key command paths to avoid leaking raw backend/runtime details.
+
+### Fixed
+
+- Duplicate query toasts on cloud fallback/error.
+- Relationship explain path now consistently meters credits.
+- Risk request fallback now clears loading state reliably.
+- Removed status-bar attribution badges from extension webview.
+
 ## [0.1.6] - 2026-03-07
 
 ### Changed

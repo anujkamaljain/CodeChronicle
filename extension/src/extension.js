@@ -26,6 +26,9 @@ let authWebviewProvider;
 let authInitialised = false;
 const DEFAULT_WEBSITE_URL = 'https://codechronicle-seven.vercel.app';
 let walletSnapshot = null;
+const SUMMARY_FILE_CONTENT_LIMIT = 25000;
+const DETAILED_FILE_CONTENT_LIMIT = 45000;
+const QUERY_FILE_CONTENT_LIMIT = 15000;
 
 // Shared state
 const state = {
@@ -154,13 +157,17 @@ function activate(context) {
             }
         }),
         vscode.commands.registerCommand('codechronicle.buyCredits', async () => {
-            if (!requireAuth()) return;
             const config = vscode.workspace.getConfiguration('codechronicle');
             const websiteUrl = (config.get('websiteUrl') || DEFAULT_WEBSITE_URL).replace(/\/+$/, '');
+            const isLoggedIn = !!authService?.isAuthenticated;
             const email = encodeURIComponent(authService?.user?.email || '');
-            const target = `${websiteUrl}/billing?emailHint=${email}&from=extension`;
+            const target = isLoggedIn
+                ? `${websiteUrl}/billing?emailHint=${email}&from=extension`
+                : `${websiteUrl}/login?from=extension&next=%2Fbilling`;
             await vscode.env.openExternal(vscode.Uri.parse(target));
-            vscode.window.showInformationMessage('CodeChronicle: Opened billing page in your browser.');
+            vscode.window.showInformationMessage(
+                `CodeChronicle: Opened ${isLoggedIn ? 'billing' : 'login'} page in your browser.`
+            );
         }),
         vscode.commands.registerCommand('codechronicle.viewCredits', async () => {
             if (!requireAuth()) return;
@@ -182,7 +189,8 @@ function activate(context) {
                 });
                 updateStatusBar('ready');
             } catch (err) {
-                vscode.window.showErrorMessage(`CodeChronicle: Failed to load credits - ${err.message}`);
+                console.error('CodeChronicle: viewCredits error:', err);
+                vscode.window.showErrorMessage('CodeChronicle: Failed to load credits. Please check your connection and try again.');
             }
         }),
     );
@@ -353,8 +361,8 @@ async function scanWorkspace() {
             }
         );
     } catch (err) {
-        vscode.window.showErrorMessage(`CodeChronicle: Scan failed - ${err.message}`);
-        console.error('Scan error:', err);
+        console.error('CodeChronicle: Scan error:', err);
+        vscode.window.showErrorMessage('CodeChronicle: Scan failed. Please check the workspace and try again.');
     } finally {
         state.isScanning = false;
         updateStatusBar('ready');
@@ -424,6 +432,14 @@ async function showGraph(context) {
                             type: 'init',
                             graph: state.graph,
                         });
+                        if (walletSnapshot && Number.isFinite(walletSnapshot.balanceCredits)) {
+                            panel.webview.postMessage({
+                                type: 'wallet',
+                                balanceCredits: walletSnapshot.balanceCredits,
+                            });
+                        } else {
+                            refreshWalletSnapshot(panel).catch(() => {});
+                        }
                         // Check cloud AI status on startup
                         state.apiClient.healthCheck().then((status) => {
                             panel.webview.postMessage({ type: 'cloudStatus', status });
@@ -466,18 +482,26 @@ async function showGraph(context) {
                     case 'requestRelationship':
                         handleRelationshipRequest(panel, message.sourceId, message.targetId, message.direction);
                         break;
+
+                    case 'viewCredits':
+                        await vscode.commands.executeCommand('codechronicle.viewCredits');
+                        break;
+                    case 'buyCredits':
+                        await vscode.commands.executeCommand('codechronicle.buyCredits');
+                        break;
                 }
             } catch (err) {
                 console.error('CodeChronicle: Webview message handling failed:', err);
-                vscode.window.showErrorMessage(`CodeChronicle: Webview error - ${err.message}`);
+                vscode.window.showErrorMessage('CodeChronicle: Something went wrong while processing the request. Please try again.');
             }
         });
     } catch (err) {
         console.error('CodeChronicle: Failed to open graph view:', err);
-        vscode.window.showErrorMessage(`CodeChronicle: Failed to open graph view - ${err.message}`);
+        vscode.window.showErrorMessage('CodeChronicle: Failed to open graph view. Please try again.');
     }
 }
 
+const _summaryInFlight = new Set();
 async function handleNodeClick(panel, nodeId) {
     const node = state.graph?.nodes[nodeId];
     if (!node) return;
@@ -493,8 +517,9 @@ async function handleNodeClick(panel, nodeId) {
         metrics: node.metrics,
     });
 
-    // If cloud AI is available, fetch AI summary
-    if (state.apiClient.isAvailable() && !node.summary) {
+    // If cloud AI is available, fetch AI summary (prevent duplicate in-flight requests)
+    if (state.apiClient.isAvailable() && !node.summary && !_summaryInFlight.has(nodeId)) {
+        _summaryInFlight.add(nodeId);
         try {
             // Read actual file content for richer AI analysis
             let fileContent = null;
@@ -503,7 +528,7 @@ async function handleNodeClick(panel, nodeId) {
                 try {
                     const absPath = path.join(workspaceFolders[0].uri.fsPath, node.path);
                     const raw = fs.readFileSync(absPath, 'utf-8');
-                    fileContent = cleanCodeContent(raw).substring(0, 80000); // ~20K tokens
+                    fileContent = cleanCodeContent(raw).substring(0, SUMMARY_FILE_CONTENT_LIMIT);
                 } catch {
                     // File not readable — proceed without content
                 }
@@ -528,8 +553,12 @@ async function handleNodeClick(panel, nodeId) {
             panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
         } catch (err) {
             console.warn('AI summary unavailable:', err.message);
-            // Update cloud status but don't show persistent error
-            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+            postCloudFallback(panel, err, 'summary');
+            if (shouldMarkCloudDisconnected(err)) {
+                panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+            }
+        } finally {
+            _summaryInFlight.delete(nodeId);
         }
     }
 
@@ -563,6 +592,7 @@ async function handleNodeClick(panel, nodeId) {
             localFallback: true,
         });
     }
+    refreshWalletSnapshot(panel).catch(() => {});
 }
 
 async function handleBlastRadius(panel, nodeId) {
@@ -575,7 +605,9 @@ async function handleBlastRadius(panel, nodeId) {
     });
 }
 
+let _queryInFlight = false;
 async function handleQuery(panel, query) {
+    if (_queryInFlight) return;
     if (!state.apiClient.isAvailable()) {
         panel.webview.postMessage({
             type: 'queryResult',
@@ -588,6 +620,7 @@ async function handleQuery(panel, query) {
         return;
     }
 
+    _queryInFlight = true;
     try {
         // Rank files by relevance to the query instead of taking arbitrary first N
         const rankedFiles = rankFilesByRelevance(query, state.graph);
@@ -610,7 +643,7 @@ async function handleQuery(panel, query) {
                 try {
                     const absPath = path.join(workspacePath, f.path);
                     const raw = fs.readFileSync(absPath, 'utf-8');
-                    entry.content = cleanCodeContent(raw).substring(0, 50000); // ~12.5K tokens per file
+                    entry.content = cleanCodeContent(raw).substring(0, QUERY_FILE_CONTENT_LIMIT);
                 } catch {
                     // File not readable — skip content
                 }
@@ -635,15 +668,22 @@ async function handleQuery(panel, query) {
         panel.webview.postMessage({ type: 'queryResult', result });
     } catch (err) {
         console.warn('Query failed:', err.message);
+        postCloudFallback(panel, err, 'query');
         panel.webview.postMessage({
             type: 'queryResult',
+            isFallback: true,
             result: {
-                answer: `Query failed: ${err.message}. The AI backend may be unavailable.`,
+                answer: getCloudIssueMeta(err).userMessage,
                 references: [],
                 confidence: 0,
             },
         });
-        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        if (shouldMarkCloudDisconnected(err)) {
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        }
+    } finally {
+        _queryInFlight = false;
+        refreshWalletSnapshot(panel).catch(() => {});
     }
 }
 
@@ -795,7 +835,19 @@ async function handleRiskRequest(panel, nodeId) {
             panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
         } catch (err) {
             console.warn('AI risk assessment unavailable:', err.message);
-            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+            postCloudFallback(panel, err, 'risk');
+            panel.webview.postMessage({
+                type: 'risk',
+                nodeId,
+                risk: localRisk,
+                isAiRisk: true,
+                cached: false,
+            });
+            if (shouldMarkCloudDisconnected(err)) {
+                panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+            }
+        } finally {
+            refreshWalletSnapshot(panel).catch(() => {});
         }
     }
 }
@@ -831,7 +883,7 @@ async function handleDetailedSummaryRequest(panel, nodeId) {
             try {
                 const absPath = path.join(workspaceFolders[0].uri.fsPath, node.path);
                 const raw = fs.readFileSync(absPath, 'utf-8');
-                fileContent = cleanCodeContent(raw).substring(0, 80000);
+                fileContent = cleanCodeContent(raw).substring(0, DETAILED_FILE_CONTENT_LIMIT);
             } catch {
                 // File not readable — proceed without content
             }
@@ -857,13 +909,18 @@ async function handleDetailedSummaryRequest(panel, nodeId) {
         panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
     } catch (err) {
         console.warn('Detailed summary unavailable:', err.message);
+        postCloudFallback(panel, err, 'detailedSummary');
         panel.webview.postMessage({
             type: 'detailedSummary',
             nodeId,
             summary: null,
-            error: `Failed to generate detailed summary: ${err.message}`,
+            error: getCloudIssueMeta(err).userMessage,
         });
-        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        if (shouldMarkCloudDisconnected(err)) {
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        }
+    } finally {
+        refreshWalletSnapshot(panel).catch(() => {});
     }
 }
 
@@ -934,13 +991,18 @@ async function handleRelationshipRequest(panel, sourceId, targetId, direction) {
         panel.webview.postMessage({ type: 'cloudStatus', status: 'connected' });
     } catch (err) {
         console.warn('Relationship analysis unavailable:', err.message);
+        postCloudFallback(panel, err, 'relationship');
         panel.webview.postMessage({
             type: 'relationshipResult',
             sourceId, targetId,
             summary: null,
-            error: `Failed to analyze relationship: ${err.message}`,
+            error: getCloudIssueMeta(err).userMessage,
         });
-        panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        if (shouldMarkCloudDisconnected(err)) {
+            panel.webview.postMessage({ type: 'cloudStatus', status: 'disconnected' });
+        }
+    } finally {
+        refreshWalletSnapshot(panel).catch(() => {});
     }
 }
 
@@ -1385,14 +1447,94 @@ function deactivate() {
     if (fileWatcher) fileWatcher.stop();
 }
 
-async function refreshWalletSnapshot() {
+async function refreshWalletSnapshot(panel) {
     if (!state.apiClient || !authService?.isAuthenticated) return;
     try {
         walletSnapshot = await state.apiClient.getWallet();
         updateStatusBar('ready');
+        if (panel?.webview) {
+            panel.webview.postMessage({
+                type: 'wallet',
+                balanceCredits: walletSnapshot.balanceCredits,
+            });
+        }
     } catch (err) {
         console.warn('CodeChronicle: wallet refresh failed:', err.message);
     }
+}
+
+function shouldMarkCloudDisconnected(err) {
+    const msg = String(err?.message || '').toLowerCase();
+    if (!msg) return true;
+    // Keep cloud "connected" for expected business/auth errors.
+    if (msg.includes('402') || msg.includes('insufficient credits') || msg.includes('transaction cancelled')) return false;
+    if (msg.includes('401') || msg.includes('403')) return false;
+    // Mark disconnected for connectivity/server issues.
+    return (
+        msg.includes('cloud ai is currently unavailable') ||
+        msg.includes('network') ||
+        msg.includes('failed to fetch') ||
+        msg.includes('timed out') ||
+        msg.includes('api error: 5')
+    );
+}
+
+function getCloudIssueMeta(err) {
+    const rawMessage = String(err?.message || '');
+    const msg = rawMessage.toLowerCase();
+
+    if (msg.includes('402') || msg.includes('insufficient credits') || msg.includes('transaction cancelled')) {
+        return {
+            code: 'INSUFFICIENT_CREDITS',
+            severity: 'warning',
+            userMessage: 'Insufficient credits. Please purchase more credits from the billing page to continue using Cloud AI.',
+        };
+    }
+    if (msg.includes('401') || msg.includes('403')) {
+        return {
+            code: 'AUTH_REQUIRED',
+            severity: 'warning',
+            userMessage: 'Your session has expired. Please sign in again to continue.',
+        };
+    }
+    if (msg.includes('429') || msg.includes('rate') || msg.includes('daily ai query limit')) {
+        return {
+            code: 'RATE_LIMITED',
+            severity: 'warning',
+            userMessage: 'You have reached the rate limit. Please wait a moment and try again.',
+        };
+    }
+    if (msg.includes('failed to fetch') || msg.includes('network') || msg.includes('timed out')) {
+        return {
+            code: 'NETWORK_ERROR',
+            severity: 'error',
+            userMessage: 'Unable to reach Cloud AI due to a network issue. Local analysis is shown instead.',
+        };
+    }
+    if (msg.includes('api error: 5') || msg.includes('cloud ai is currently unavailable')) {
+        return {
+            code: 'SERVICE_UNAVAILABLE',
+            severity: 'error',
+            userMessage: 'Cloud AI is temporarily unavailable. Local analysis is shown instead.',
+        };
+    }
+    return {
+        code: 'UNKNOWN',
+        severity: 'error',
+        userMessage: 'Something went wrong with Cloud AI. Local analysis is shown instead.',
+    };
+}
+
+function postCloudFallback(panel, err, operation) {
+    if (!panel?.webview) return;
+    const meta = getCloudIssueMeta(err);
+    panel.webview.postMessage({
+        type: 'cloudFallback',
+        operation,
+        reasonCode: meta.code,
+        severity: meta.severity,
+        message: meta.userMessage,
+    });
 }
 
 module.exports = { activate, deactivate };

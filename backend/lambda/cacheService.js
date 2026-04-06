@@ -57,7 +57,7 @@ module.exports.get = async (event) => {
 
     } catch (err) {
         console.error('Cache get error:', err);
-        return response(500, { error: 'Failed to retrieve cache.', details: err.message });
+        return response(500, { error: 'Failed to retrieve cache.' });
     }
 };
 
@@ -92,7 +92,7 @@ module.exports.put = async (event) => {
 
     } catch (err) {
         console.error('Cache put error:', err);
-        return response(500, { error: 'Failed to store cache.', details: err.message });
+        return response(500, { error: 'Failed to store cache.' });
     }
 };
 

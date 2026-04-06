@@ -6,6 +6,7 @@ const ICONS = {
     success: '✓',
     error: '✗',
     info: 'ℹ',
+    warning: '!',
 };
 
 export default function ToastContainer() {
@@ -31,15 +32,9 @@ export default function ToastContainer() {
                         </div>
                         <button
                             onClick={() => removeToast(toast.id)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--text-muted)',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                padding: '2px',
-                                flexShrink: 0,
-                            }}
+                            className="toast-close"
+                            aria-label="Dismiss notification"
+                            title="Dismiss"
                         >
                             ✕
                         </button>

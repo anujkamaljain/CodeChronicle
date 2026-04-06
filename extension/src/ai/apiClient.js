@@ -243,7 +243,7 @@ class APIClient {
         }
 
         const startedAt = Date.now();
-        const maxWaitMs = 30000;
+        const maxWaitMs = 60000;
         let waitMs = submit.pollAfterMs || 1000;
 
         while (Date.now() - startedAt < maxWaitMs) {
@@ -283,6 +283,13 @@ class APIClient {
      * @returns {Promise<{balanceCredits:number,ledger:Array}>}
      */
     async getWallet() {
+        if (!this.enabled || !this.endpoint) {
+            throw new Error('Cloud API is not configured.');
+        }
+        // Wallet reads are lightweight; attempt a quick recovery if circuit is open.
+        if (this._circuitOpen) {
+            await this.healthCheck();
+        }
         if (!this.isAvailable()) {
             throw new Error('Cloud API is currently unavailable.');
         }
@@ -299,11 +306,14 @@ class APIClient {
     async makeRequest(urlPath, options) {
         const url = `${this.endpoint}${urlPath}`;
         let lastError;
+        const method = (options.method || 'GET').toUpperCase();
+        const allowRetry = this._shouldRetryRequest(urlPath, method);
+        const maxAttempts = allowRetry ? (this.maxRetries + 1) : 1;
 
-        for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 const fetchOptions = {
-                    method: options.method || 'GET',
+                    method,
                     headers: {
                         'Content-Type': 'application/json',
                         'x-cc-client-id': this.clientId,
@@ -319,7 +329,7 @@ class APIClient {
 
                 const response = await fetch(url, fetchOptions);
 
-                if (response.status === 429) {
+                if (response.status === 429 && allowRetry) {
                     // Rate limited - wait and retry
                     const delay = this.baseDelay * Math.pow(2, attempt);
                     console.warn(`Rate limited. Retrying in ${delay}ms...`);
@@ -328,11 +338,12 @@ class APIClient {
                 }
 
                 if (!response.ok) {
-                    // Read error body for debugging
                     let errorDetail = '';
+                    let rawDetails = '';
                     try {
                         const errorBody = await response.json();
-                        errorDetail = errorBody.details || errorBody.error || '';
+                        errorDetail = errorBody.error || '';
+                        rawDetails = errorBody.details || '';
                         console.error(`API ${response.status} response:`, JSON.stringify(errorBody));
                     } catch { /* ignore parse errors */ }
 
@@ -362,12 +373,12 @@ class APIClient {
 
                 // Don't retry on client errors (4xx)
                 const isClientError = err.message && err.message.includes('API error: 4');
-                if (isClientError || attempt >= this.maxRetries) {
+                if (!allowRetry || isClientError || attempt >= (maxAttempts - 1)) {
                     break;
                 }
 
                 const delay = this.baseDelay * Math.pow(2, attempt);
-                console.warn(`Request failed (attempt ${attempt + 1}/${this.maxRetries + 1}). Retrying in ${delay}ms...`);
+                console.warn(`Request failed (attempt ${attempt + 1}/${maxAttempts}). Retrying in ${delay}ms...`);
                 await this.sleep(delay);
             }
         }
@@ -390,6 +401,24 @@ class APIClient {
      */
     sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Prevent retries on billable/non-idempotent AI endpoints.
+     * Retries can cause duplicate debit attempts when backend already processed a request.
+     * @param {string} urlPath
+     * @param {string} method
+     * @returns {boolean}
+     */
+    _shouldRetryRequest(urlPath, method) {
+        if (method !== 'POST') return true;
+        const nonRetryable = [
+            '/ai/explain',
+            '/ai/query',
+            '/ai/query/async',
+            '/ai/risk-score',
+        ];
+        return !nonRetryable.some((p) => urlPath.startsWith(p));
     }
 }
 

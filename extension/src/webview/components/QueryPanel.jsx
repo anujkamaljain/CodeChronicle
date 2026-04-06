@@ -127,7 +127,8 @@ function MarkdownRenderer({ text }) {
 }
 
 export default function QueryPanel({ onQuery, onOpenFile }) {
-    const { queryResult, queryHistory, isLoading, loadingMessage, currentQuery, setCurrentQuery, addQueryToHistory } = useStore();
+    const { queryResult, queryHistory, isLoading, isQueryLoading, loadingMessage, currentQuery, setCurrentQuery, addQueryToHistory } = useStore();
+    const queryBusy = isQueryLoading || isLoading;
     const [localQuery, setLocalQuery] = useState('');
     const [copied, setCopied] = useState(false);
     const [queryStartTime, setQueryStartTime] = useState(null);
@@ -136,6 +137,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (queryBusy) return;
         const q = localQuery.trim();
         if (!q) return;
         setCurrentQuery(q);
@@ -188,23 +190,36 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    handleSubmit(e);
+                                    if (!queryBusy) handleSubmit(e);
                                 }
                             }}
-                            placeholder="Ask anything about your codebase..."
-                            className="input-glass flex-1 resize-none border-none bg-transparent"
+                            disabled={queryBusy}
+                            placeholder={queryBusy ? 'Waiting for response...' : 'Ask anything about your codebase...'}
+                            className="input-glass flex-1 resize-none border-none bg-transparent disabled:opacity-50"
                             rows={2}
                             style={{ background: 'transparent' }}
                         />
                         <button
                             type="submit"
-                            disabled={isLoading || !localQuery.trim()}
-                            className={`btn-neon px-4 py-3 self-end flex-shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed ${isLoading ? 'btn-loading' : ''}`}
+                            disabled={queryBusy || !localQuery.trim()}
+                            className={`btn-neon px-4 py-3 self-end flex-shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed ${queryBusy ? 'btn-loading' : ''}`}
                         >
-                            {isLoading ? <span className="btn-spinner" /> : null}
-                            {isLoading ? 'Asking...' : 'Ask'}
+                            {queryBusy ? <span className="btn-spinner" /> : null}
+                            {queryBusy ? 'Asking...' : 'Ask'}
                         </button>
                     </div>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between px-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="kbd-hint">Enter</span>
+                        <span>Ask</span>
+                        <span className="opacity-50">•</span>
+                        <span className="kbd-hint">Shift+Enter</span>
+                        <span>New line</span>
+                    </div>
+                    {queryBusy && (
+                        <span style={{ color: 'var(--neon-cyan)' }}>Waiting for response...</span>
+                    )}
                 </div>
             </form>
 
@@ -221,7 +236,8 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                             <button
                                 key={i}
                                 onClick={() => handleExampleClick(q)}
-                                className="text-xs px-3 py-1.5 rounded-full transition-all hover:scale-105"
+                                disabled={queryBusy}
+                                className="interactive-chip text-xs px-3 py-1.5 rounded-full transition-all hover:scale-105 disabled:cursor-not-allowed"
                                 style={{
                                     background: 'rgba(0, 240, 255, 0.06)',
                                     border: '1px solid rgba(0, 240, 255, 0.15)',
@@ -237,7 +253,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
 
             {/* Loading state */}
             <AnimatePresence>
-                {isLoading && (
+                {queryBusy && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -354,7 +370,8 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                                         <button
                                             key={i}
                                             onClick={() => handleExampleClick(q)}
-                                            className="text-xs px-2.5 py-1 rounded-full transition-all"
+                                            disabled={queryBusy}
+                                            className="interactive-chip text-xs px-2.5 py-1 rounded-full transition-all disabled:cursor-not-allowed"
                                             style={{
                                                 background: 'rgba(168, 85, 247, 0.08)',
                                                 border: '1px solid rgba(168, 85, 247, 0.2)',
@@ -372,7 +389,7 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
             </AnimatePresence>
 
             {/* Query history */}
-            {queryHistory.length > 0 && !isLoading && (
+            {queryHistory.length > 0 && !queryBusy && (
                 <div>
                     <h4 className="text-xs font-semibold mb-2 uppercase tracking-widest"
                         style={{ color: 'var(--text-muted)' }}>
@@ -381,8 +398,8 @@ export default function QueryPanel({ onQuery, onOpenFile }) {
                     <div className="space-y-1.5">
                         {queryHistory.slice(0, 10).map((item, i) => (
                             <div key={i}
-                                className="glass-card-sm p-2 cursor-pointer hover:border-opacity-50 transition-all"
-                                onClick={() => handleExampleClick(item.query)}
+                                className={`glass-card-sm p-2 transition-all ${queryBusy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-opacity-50'}`}
+                                onClick={() => !queryBusy && handleExampleClick(item.query)}
                             >
                                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                                     {item.query}

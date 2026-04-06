@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import useStore from '../store/useStore';
 
-export default function StatusBar() {
-    const { graph, isLoading, loadingMessage, cloudStatus, error, clearError } = useStore();
+export default function StatusBar({ onViewCredits, onBuyCredits }) {
+    const { graph, isLoading, loadingMessage, cloudStatus, walletCredits, error, clearError } = useStore();
 
     useEffect(() => {
         if (error) {
@@ -65,6 +65,32 @@ export default function StatusBar() {
 
                 {/* Right: Cloud status */}
                 <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={onViewCredits}
+                        className="status-pill px-2 py-0.5 border text-[11px] font-mono"
+                        style={{
+                            borderColor: 'rgba(0, 240, 255, 0.35)',
+                            color: 'var(--neon-cyan)',
+                            background: 'rgba(0, 240, 255, 0.06)',
+                        }}
+                        title="View wallet credits and recent credit activity"
+                    >
+                        Credits: {Number.isFinite(walletCredits) ? walletCredits : '...'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onBuyCredits}
+                        className="status-pill px-2 py-0.5 border text-[11px] font-mono"
+                        style={{
+                            borderColor: 'rgba(16, 185, 129, 0.35)',
+                            color: 'var(--neon-green)',
+                            background: 'rgba(16, 185, 129, 0.07)',
+                        }}
+                        title="Buy credits on CodeChronicle website"
+                    >
+                        Buy Credits
+                    </button>
                     <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full"
                             style={{
@@ -81,57 +107,6 @@ export default function StatusBar() {
                 </div>
             </div>
 
-            {/* Attribution badges row */}
-            <div className="flex items-center justify-center gap-3 px-2 sm:px-4 py-1.5 flex-wrap"
-                style={{ borderTop: '1px solid rgba(148, 163, 184, 0.06)' }}>
-                {/* Made with Kiro badge */}
-                <div className="attribution-badge" style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '3px 10px',
-                    borderRadius: '20px',
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.08))',
-                    border: '1px solid rgba(168, 85, 247, 0.18)',
-                    transition: 'all 0.3s ease',
-                    cursor: 'default',
-                }}>
-                    <span style={{
-                        fontSize: '10px',
-                        fontWeight: 500,
-                        letterSpacing: '0.3px',
-                        background: 'linear-gradient(135deg, #c084fc, #f472b6)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                    }}>
-                        Made with Kiro
-                    </span>
-                </div>
-
-                <span style={{ color: 'rgba(148, 163, 184, 0.15)', fontSize: '8px' }}>✦</span>
-
-                {/* Powered by AWS badge */}
-                <div className="attribution-badge" style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '3px 10px',
-                    borderRadius: '20px',
-                    background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(245, 158, 11, 0.08))',
-                    border: '1px solid rgba(251, 146, 60, 0.18)',
-                    transition: 'all 0.3s ease',
-                    cursor: 'default',
-                }}>
-                    <span style={{
-                        fontSize: '10px',
-                        fontWeight: 500,
-                        letterSpacing: '0.3px',
-                        background: 'linear-gradient(135deg, #fb923c, #fbbf24)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                    }}>
-                        Powered by AWS
-                    </span>
-                </div>
-            </div>
         </div>
     );
 }

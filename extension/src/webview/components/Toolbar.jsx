@@ -44,11 +44,14 @@ export default function Toolbar({ onRefresh }) {
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="hidden sm:inline kbd-hint" title="Keyboard shortcut">
+                    Ctrl/Cmd+Shift+P
+                </span>
                 <button
                     onClick={onRefresh}
                     disabled={isLoading}
                     className={`btn-neon text-xs py-1.5 px-3 flex items-center justify-center gap-1.5 ${isLoading ? 'btn-loading' : ''}`}
-                    title="Rescan workspace"
+                    title="Rescan workspace graph"
                 >
                     {isLoading ? <span className="btn-spinner" /> : '⟳'}
                     {isLoading ? 'Scanning...' : 'Refresh'}

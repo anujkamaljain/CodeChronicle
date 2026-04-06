@@ -129,9 +129,9 @@ This document defines a production-ready monetization approach for CodeChronicle
 | Plan | Price | Credits | Bonus % |
 |---|---:|---:|---:|
 | Trial (one-time) | ₹0 | 25 | n/a |
-| Starter | ₹99 | 99 | 0% |
-| Growth | ₹299 | 305 | ~2% |
-| Pro | ₹999 | 1,050 | ~5% |
+| Starter | ₹19 | 99 | 0% |
+| Growth | ₹49 | 305 | ~2% |
+| Pro | ₹99 | 1,050 | ~5% |
 
 ### Why trial is small
 
@@ -145,16 +145,16 @@ Give a one-time first recharge bonus to improve conversion without large margin 
 
 - Applicable only on the **first successful paid transaction** per verified account
 - Bonus is credited immediately after payment verification
-- Bonus credits expire in `30 days` (recommended) to avoid long-tail liability
+- Bonus credits do not expire (aligned with current product messaging)
 - Bonus is non-refundable and non-transferable
 
 #### Suggested first-purchase bonus slab
 
 | First Purchase Plan | Base Credits | First-Time Bonus | Total Credits |
 |---|---:|---:|---:|
-| Starter (₹99) | 99 | +20 | 119 |
-| Growth (₹299) | 305 | +45 | 350 |
-| Pro (₹999) | 1,050 | +120 | 1,170 |
+| Starter (₹19) | 99 | +20 | 119 |
+| Growth (₹49) | 305 | +45 | 350 |
+| Pro (₹99) | 1,050 | +120 | 1,170 |
 
 #### Abuse-prevention rules
 
@@ -196,23 +196,23 @@ This bonus range is intentionally conservative so overall unit economics remain 
 
 > Profitability depends on usage mix; below uses representative scenarios.
 
-### Plan: Starter (`₹99`, 99 credits)
+### Plan: Starter (`₹19`, 99 credits)
 
-- Net revenue after Razorpay: `₹96.66`
+- Net revenue after Razorpay: `₹18.55`
 - If consumed at base profile (approx 5 credits/query): ~19 queries
-- Expected blended margin target: `15%–22%`
+- Expected blended margin target: negative (adoption pricing)
 
-### Plan: Growth (`₹299`, 305 credits)
+### Plan: Growth (`₹49`, 305 credits)
 
-- Net revenue: `₹291.94`
+- Net revenue: `₹47.84`
 - Base profile: ~61 queries
-- Expected blended margin target: `12%–20%`
+- Expected blended margin target: negative (adoption pricing)
 
-### Plan: Pro (`₹999`, 1,050 credits)
+### Plan: Pro (`₹99`, 1,050 credits)
 
-- Net revenue: `₹975.42`
+- Net revenue: `₹96.66`
 - Base profile: ~210 queries
-- Expected blended margin target: `10%–18%`
+- Expected blended margin target: negative (adoption pricing)
 
 > If users consistently push very-heavy prompts, margins fall sharply. Enforce hard token limits.
 

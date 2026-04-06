@@ -78,7 +78,7 @@ module.exports.assessRisk = async (event) => {
 
     } catch (err) {
         console.error('Risk assessment error:', err);
-        return response(500, { error: 'Failed to assess risk.', details: err.message });
+        return response(500, { error: 'Failed to assess risk. Please try again later.' });
     }
 };
 

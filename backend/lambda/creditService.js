@@ -8,6 +8,8 @@ const {
     PutCommand,
     UpdateCommand,
     QueryCommand,
+    TransactWriteCommand,
+    ScanCommand,
 } = require('@aws-sdk/lib-dynamodb');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -29,9 +31,27 @@ const OUTPUT_TOKEN_USD_PER_1M = Number(process.env.OUTPUT_TOKEN_USD_PER_1M || 12
 const RAZORPAY_NET_FACTOR = Number(process.env.RAZORPAY_NET_FACTOR || 0.9764);
 
 const BILLING_PLANS = {
-    starter: { id: 'starter', name: 'Starter', amountInr: 99, baseCredits: 99, originalAmountInr: 149 },
-    growth: { id: 'growth', name: 'Growth', amountInr: 299, baseCredits: 305, originalAmountInr: 399 },
-    pro: { id: 'pro', name: 'Pro', amountInr: 999, baseCredits: 1050, originalAmountInr: 1299 },
+    starter: {
+        id: 'starter',
+        name: 'Starter',
+        amountInr: Number(process.env.STARTER_PLAN_PRICE_INR || 19),
+        baseCredits: Number(process.env.STARTER_PLAN_CREDITS || 99),
+        originalAmountInr: Number(process.env.STARTER_PLAN_ORIGINAL_PRICE_INR || 29),
+    },
+    growth: {
+        id: 'growth',
+        name: 'Growth',
+        amountInr: Number(process.env.GROWTH_PLAN_PRICE_INR || 49),
+        baseCredits: Number(process.env.GROWTH_PLAN_CREDITS || 305),
+        originalAmountInr: Number(process.env.GROWTH_PLAN_ORIGINAL_PRICE_INR || 79),
+    },
+    pro: {
+        id: 'pro',
+        name: 'Pro',
+        amountInr: Number(process.env.PRO_PLAN_PRICE_INR || 99),
+        baseCredits: Number(process.env.PRO_PLAN_CREDITS || 1050),
+        originalAmountInr: Number(process.env.PRO_PLAN_ORIGINAL_PRICE_INR || 149),
+    },
 };
 
 const FIRST_PURCHASE_BONUS = {
@@ -48,6 +68,16 @@ function createEntryId(prefix) {
     return `${prefix}_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
 }
 
+function createDeterministicUsageEntryId(sourceId) {
+    const digest = crypto.createHash('sha256').update(String(sourceId || '')).digest('hex').slice(0, 20);
+    return `usage_${digest}`;
+}
+
+function createDeterministicLedgerEntryId(sourceId) {
+    const digest = crypto.createHash('sha256').update(String(sourceId || '')).digest('hex').slice(0, 20);
+    return `idemp_${digest}`;
+}
+
 function validateTables() {
     if (!WALLET_TABLE || !LEDGER_TABLE || !PAYMENTS_TABLE || !METRICS_TABLE) {
         throw new Error('Credit tables are not configured in environment variables.');
@@ -57,7 +87,7 @@ function validateTables() {
 async function incrementMetrics(delta) {
     const entries = Object.entries(delta || {}).filter(([, v]) => Number(v) !== 0);
     const addExpr = [];
-    const values = { ':zero': 0, ':now': nowIso() };
+    const values = { ':now': nowIso() };
     let idx = 0;
     for (const [key, value] of entries) {
         idx += 1;
@@ -169,19 +199,29 @@ async function recordLedgerEntry({ userId, type, credits, source, sourceId, meta
 }
 
 async function recordLedgerEntryIdempotent({ userId, type, credits, source, sourceId, metadata }) {
-    const existing = await ddb.send(new QueryCommand({
-        TableName: LEDGER_TABLE,
-        IndexName: 'SourceIdIndex',
-        KeyConditionExpression: 'sourceId = :sourceId',
-        ExpressionAttributeValues: { ':sourceId': sourceId },
-        Limit: 1,
-    }));
-    if (existing.Items && existing.Items.length > 0) {
-        return { created: false, entryId: existing.Items[0].entryId };
+    const entryId = createDeterministicLedgerEntryId(sourceId);
+    try {
+        await ddb.send(new PutCommand({
+            TableName: LEDGER_TABLE,
+            Item: {
+                userId,
+                entryId,
+                type,
+                credits,
+                source,
+                sourceId,
+                metadata: metadata || {},
+                createdAt: nowIso(),
+            },
+            ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+        }));
+        return { created: true, entryId };
+    } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+            return { created: false, entryId };
+        }
+        throw err;
     }
-
-    const entryId = await recordLedgerEntry({ userId, type, credits, source, sourceId, metadata });
-    return { created: true, entryId };
 }
 
 function getPlanById(planId) {
@@ -214,27 +254,46 @@ function estimateMaxCreditsForRequest(promptChars, maxOutputTokens) {
 
 async function debitCreditsForUsage({ userId, source, sourceId, inputTokens, outputTokens, metadata }) {
     await ensureUserWallet(userId);
+    if (!sourceId) {
+        throw new Error('sourceId is required for usage debit.');
+    }
 
     const debit = calculateCreditsToDebit(inputTokens, outputTokens);
-    await ddb.send(new UpdateCommand({
-        TableName: WALLET_TABLE,
-        Key: { userId },
-        UpdateExpression: 'SET balanceCredits = balanceCredits - :debit, updatedAt = :now',
-        ConditionExpression: 'balanceCredits >= :debit',
-        ExpressionAttributeValues: {
-            ':debit': debit,
-            ':now': nowIso(),
-        },
+    if (!Number.isFinite(debit) || debit <= 0) return { debited: 0 };
+    const now = nowIso();
+    const usageEntryId = createDeterministicUsageEntryId(sourceId);
+    await ddb.send(new TransactWriteCommand({
+        TransactItems: [
+            {
+                Update: {
+                    TableName: WALLET_TABLE,
+                    Key: { userId },
+                    UpdateExpression: 'SET balanceCredits = balanceCredits - :debit, updatedAt = :now',
+                    ConditionExpression: 'balanceCredits >= :debit',
+                    ExpressionAttributeValues: {
+                        ':debit': debit,
+                        ':now': now,
+                    },
+                },
+            },
+            {
+                Put: {
+                    TableName: LEDGER_TABLE,
+                    Item: {
+                        userId,
+                        entryId: usageEntryId,
+                        type: 'debit',
+                        credits: debit,
+                        source,
+                        sourceId,
+                        metadata: { ...(metadata || {}), inputTokens, outputTokens },
+                        createdAt: now,
+                    },
+                    ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                },
+            },
+        ],
     }));
-
-    await recordLedgerEntry({
-        userId,
-        type: 'debit',
-        credits: debit,
-        source,
-        sourceId,
-        metadata: { ...(metadata || {}), inputTokens, outputTokens },
-    });
     await incrementMetrics({
         totalOutstandingCredits: -debit,
         creditsConsumed: debit,
@@ -244,26 +303,55 @@ async function debitCreditsForUsage({ userId, source, sourceId, inputTokens, out
 }
 
 async function reserveCreditsForUsage({ userId, credits, source, sourceId, metadata }) {
+    if (!Number.isFinite(credits) || credits <= 0) {
+        throw new Error('Invalid credit amount for reservation.');
+    }
     await ensureUserWallet(userId);
-    await ddb.send(new UpdateCommand({
-        TableName: WALLET_TABLE,
-        Key: { userId },
-        UpdateExpression: 'SET balanceCredits = balanceCredits - :credits, updatedAt = :now',
-        ConditionExpression: 'balanceCredits >= :credits',
-        ExpressionAttributeValues: {
-            ':credits': credits,
-            ':now': nowIso(),
-        },
+    const now = nowIso();
+    const usageEntryId = createDeterministicUsageEntryId(sourceId);
+
+    // Idempotency guard: if this exact sourceId was already processed, do nothing.
+    const existing = await ddb.send(new GetCommand({
+        TableName: LEDGER_TABLE,
+        Key: { userId, entryId: usageEntryId },
+    }));
+    if (existing.Item) {
+        return { reserved: 0, duplicate: true };
+    }
+
+    await ddb.send(new TransactWriteCommand({
+        TransactItems: [
+            {
+                Update: {
+                    TableName: WALLET_TABLE,
+                    Key: { userId },
+                    UpdateExpression: 'SET balanceCredits = balanceCredits - :credits, updatedAt = :now',
+                    ConditionExpression: 'balanceCredits >= :credits',
+                    ExpressionAttributeValues: {
+                        ':credits': credits,
+                        ':now': now,
+                    },
+                },
+            },
+            {
+                Put: {
+                    TableName: LEDGER_TABLE,
+                    Item: {
+                        userId,
+                        entryId: usageEntryId,
+                        type: 'debit',
+                        credits,
+                        source,
+                        sourceId,
+                        metadata: metadata || {},
+                        createdAt: now,
+                    },
+                    ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                },
+            },
+        ],
     }));
 
-    await recordLedgerEntry({
-        userId,
-        type: 'debit',
-        credits,
-        source,
-        sourceId,
-        metadata: metadata || {},
-    });
     await incrementMetrics({
         totalOutstandingCredits: -credits,
         creditsConsumed: credits,
@@ -275,25 +363,50 @@ async function reserveCreditsForUsage({ userId, credits, source, sourceId, metad
 async function creditAdjustment({ userId, credits, source, sourceId, metadata }) {
     if (!credits || credits <= 0) return { adjusted: 0 };
     await ensureUserWallet(userId);
-    await ddb.send(new UpdateCommand({
-        TableName: WALLET_TABLE,
-        Key: { userId },
-        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, updatedAt = :now',
-        ExpressionAttributeValues: {
-            ':zero': 0,
-            ':credits': credits,
-            ':now': nowIso(),
-        },
+    const now = nowIso();
+    const usageEntryId = createDeterministicUsageEntryId(sourceId);
+
+    const existing = await ddb.send(new GetCommand({
+        TableName: LEDGER_TABLE,
+        Key: { userId, entryId: usageEntryId },
+    }));
+    if (existing.Item) {
+        return { adjusted: 0, duplicate: true };
+    }
+
+    await ddb.send(new TransactWriteCommand({
+        TransactItems: [
+            {
+                Update: {
+                    TableName: WALLET_TABLE,
+                    Key: { userId },
+                    UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, updatedAt = :now',
+                    ExpressionAttributeValues: {
+                        ':zero': 0,
+                        ':credits': credits,
+                        ':now': now,
+                    },
+                },
+            },
+            {
+                Put: {
+                    TableName: LEDGER_TABLE,
+                    Item: {
+                        userId,
+                        entryId: usageEntryId,
+                        type: 'credit',
+                        credits,
+                        source,
+                        sourceId,
+                        metadata: metadata || {},
+                        createdAt: now,
+                    },
+                    ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                },
+            },
+        ],
     }));
 
-    await recordLedgerEntry({
-        userId,
-        type: 'credit',
-        credits,
-        source,
-        sourceId,
-        metadata: metadata || {},
-    });
     const isUsageRelease = source.startsWith('ai_usage_');
     await incrementMetrics({
         totalOutstandingCredits: credits,
@@ -365,44 +478,162 @@ async function grantCreditsForSuccessfulPayment({
     const plan = getPlanById(planId);
     if (!plan) throw new Error(`Unknown plan for payment: ${planId}`);
 
-    const wallet = await ensureUserWallet(userId);
-    const eligibleForFirstBonus = !wallet.hasFirstPurchaseBonusClaimed;
-    const bonus = eligibleForFirstBonus ? (FIRST_PURCHASE_BONUS[plan.id] || 0) : 0;
-    const totalCredits = plan.baseCredits + bonus;
     const sourceId = `razorpay_payment:${razorpayPaymentId}`;
-
-    const ledgerResult = await recordLedgerEntryIdempotent({
-        userId,
-        type: 'credit',
-        credits: totalCredits,
-        source: 'razorpay_order',
-        sourceId,
-        metadata: {
-            paymentId,
-            planId,
-            baseCredits: plan.baseCredits,
-            bonusCredits: bonus,
-            razorpayOrderId,
-            razorpayPaymentId,
-            ...(metadata || {}),
-        },
-    });
-
-    if (!ledgerResult.created) {
+    const ledgerEntryId = createDeterministicLedgerEntryId(sourceId);
+    const existing = await ddb.send(new GetCommand({
+        TableName: LEDGER_TABLE,
+        Key: { userId, entryId: ledgerEntryId },
+    }));
+    if (existing.Item) {
         return { granted: false, reason: 'already_processed' };
     }
 
-    await ddb.send(new UpdateCommand({
-        TableName: WALLET_TABLE,
-        Key: { userId },
-        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, hasFirstPurchaseBonusClaimed = :bonusClaimed, updatedAt = :now',
-        ExpressionAttributeValues: {
-            ':zero': 0,
-            ':credits': totalCredits,
-            ':bonusClaimed': eligibleForFirstBonus ? true : wallet.hasFirstPurchaseBonusClaimed,
-            ':now': nowIso(),
-        },
-    }));
+    const bonusCredits = FIRST_PURCHASE_BONUS[plan.id] || 0;
+    let appliedBonus = 0;
+    let totalCredits = plan.baseCredits;
+    const now = nowIso();
+
+    try {
+        // Bonus path: only the first successful purchase can satisfy this wallet condition.
+        totalCredits = plan.baseCredits + bonusCredits;
+        await ddb.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: WALLET_TABLE,
+                        Key: { userId },
+                        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, hasFirstPurchaseBonusClaimed = :true, updatedAt = :now',
+                        ConditionExpression: 'attribute_not_exists(hasFirstPurchaseBonusClaimed) OR hasFirstPurchaseBonusClaimed = :false',
+                        ExpressionAttributeValues: {
+                            ':zero': 0,
+                            ':credits': totalCredits,
+                            ':true': true,
+                            ':false': false,
+                            ':now': now,
+                        },
+                    },
+                },
+                {
+                    Put: {
+                        TableName: LEDGER_TABLE,
+                        Item: {
+                            userId,
+                            entryId: ledgerEntryId,
+                            type: 'credit',
+                            credits: totalCredits,
+                            source: 'razorpay_order',
+                            sourceId,
+                            metadata: {
+                                paymentId,
+                                planId,
+                                baseCredits: plan.baseCredits,
+                                bonusCredits,
+                                razorpayOrderId,
+                                razorpayPaymentId,
+                                ...(metadata || {}),
+                            },
+                            createdAt: now,
+                        },
+                        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                    },
+                },
+                {
+                    Update: {
+                        TableName: PAYMENTS_TABLE,
+                        Key: { paymentId },
+                        UpdateExpression: 'SET #status = :status, userId = :userId, planId = :planId, razorpayPaymentId = :razorpayPaymentId, razorpayOrderId = :razorpayOrderId, amountInr = :amountInr, creditsGranted = :creditsGranted, updatedAt = :now',
+                        ExpressionAttributeNames: { '#status': 'status' },
+                        ExpressionAttributeValues: {
+                            ':status': 'captured',
+                            ':userId': userId,
+                            ':planId': planId,
+                            ':razorpayPaymentId': razorpayPaymentId,
+                            ':razorpayOrderId': razorpayOrderId,
+                            ':amountInr': amountInr,
+                            ':creditsGranted': totalCredits,
+                            ':now': now,
+                        },
+                    },
+                },
+            ],
+        }));
+        appliedBonus = bonusCredits;
+    } catch (err) {
+        if (err.name !== 'TransactionCanceledException' && err.name !== 'ConditionalCheckFailedException') {
+            throw err;
+        }
+        // If already processed by a concurrent handler, return idempotent success.
+        const after = await ddb.send(new GetCommand({
+            TableName: LEDGER_TABLE,
+            Key: { userId, entryId: ledgerEntryId },
+        }));
+        if (after.Item) {
+            return { granted: false, reason: 'already_processed' };
+        }
+
+        // Non-bonus fallback path when first-purchase bonus condition is no longer true.
+        totalCredits = plan.baseCredits;
+        await ddb.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: WALLET_TABLE,
+                        Key: { userId },
+                        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, updatedAt = :now',
+                        ExpressionAttributeValues: {
+                            ':zero': 0,
+                            ':credits': totalCredits,
+                            ':now': now,
+                        },
+                    },
+                },
+                {
+                    Put: {
+                        TableName: LEDGER_TABLE,
+                        Item: {
+                            userId,
+                            entryId: ledgerEntryId,
+                            type: 'credit',
+                            credits: totalCredits,
+                            source: 'razorpay_order',
+                            sourceId,
+                            metadata: {
+                                paymentId,
+                                planId,
+                                baseCredits: plan.baseCredits,
+                                bonusCredits: 0,
+                                razorpayOrderId,
+                                razorpayPaymentId,
+                                ...(metadata || {}),
+                            },
+                            createdAt: now,
+                        },
+                        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                    },
+                },
+                {
+                    Update: {
+                        TableName: PAYMENTS_TABLE,
+                        Key: { paymentId },
+                        UpdateExpression: 'SET #status = :status, userId = :userId, planId = :planId, razorpayPaymentId = :razorpayPaymentId, razorpayOrderId = :razorpayOrderId, amountInr = :amountInr, creditsGranted = :creditsGranted, updatedAt = :now',
+                        ExpressionAttributeNames: { '#status': 'status' },
+                        ExpressionAttributeValues: {
+                            ':status': 'captured',
+                            ':userId': userId,
+                            ':planId': planId,
+                            ':razorpayPaymentId': razorpayPaymentId,
+                            ':razorpayOrderId': razorpayOrderId,
+                            ':amountInr': amountInr,
+                            ':creditsGranted': totalCredits,
+                            ':now': now,
+                        },
+                    },
+                },
+            ],
+        }));
+        appliedBonus = 0;
+    }
+
     await incrementMetrics({
         totalOutstandingCredits: totalCredits,
         creditsSold: totalCredits,
@@ -410,32 +641,10 @@ async function grantCreditsForSuccessfulPayment({
         paymentsCaptured: 1,
     });
 
-    await ddb.send(new UpdateCommand({
-        TableName: PAYMENTS_TABLE,
-        Key: { paymentId },
-        UpdateExpression: 'SET #status = :status, userId = :userId, planId = :planId, razorpayPaymentId = :razorpayPaymentId, razorpayOrderId = :razorpayOrderId, amountInr = :amountInr, creditsGranted = :creditsGranted, updatedAt = :now',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-            ':status': 'captured',
-            ':userId': userId,
-            ':planId': planId,
-            ':razorpayPaymentId': razorpayPaymentId,
-            ':razorpayOrderId': razorpayOrderId,
-            ':amountInr': amountInr,
-            ':creditsGranted': totalCredits,
-            ':now': nowIso(),
-        },
-    }));
-    await incrementMetrics({
-        totalOutstandingCredits: -creditsToReverse,
-        creditsReversed: creditsToReverse,
-        paymentsRefunded: 1,
-    });
-
     return {
         granted: true,
         totalCredits,
-        bonusCredits: bonus,
+        bonusCredits: appliedBonus,
         baseCredits: plan.baseCredits,
     };
 }
@@ -454,75 +663,290 @@ async function reverseCreditsForRefund({
     if (!payment) {
         throw new Error(`Payment not found for reversal: ${paymentId}`);
     }
-    const creditsToReverse = Math.max(0, Number(payment.creditsGranted || 0));
+    const grantedCredits = Math.max(0, Number(payment.creditsGranted || 0));
+    if (!grantedCredits) {
+        return { reversed: false, reason: 'no_credits_to_reverse' };
+    }
+
+    const alreadyReversed = await getReversedCreditsForPayment({ userId, paymentId });
+    const reversibleRemaining = Math.max(0, grantedCredits - alreadyReversed);
+    if (!reversibleRemaining) {
+        return { reversed: false, reason: 'already_fully_reversed' };
+    }
+
+    const refundAmountInr = Number(metadata?.refundAmountInr || 0);
+    const paymentAmountInr = Number(payment.amountInr || 0);
+    let requestedReversal = grantedCredits;
+    if (refundAmountInr > 0 && paymentAmountInr > 0) {
+        requestedReversal = Math.max(1, Math.round((refundAmountInr / paymentAmountInr) * grantedCredits));
+    }
+    const creditsToReverse = Math.max(0, Math.min(reversibleRemaining, requestedReversal));
     if (!creditsToReverse) {
         return { reversed: false, reason: 'no_credits_to_reverse' };
     }
 
+    // Idempotent per unique refund event id, atomically applied with wallet + payment state.
     const sourceId = `refund:${razorpayRefundId || razorpayPaymentId}`;
-    const ledgerResult = await recordLedgerEntryIdempotent({
-        userId,
-        type: 'reversal',
-        credits: creditsToReverse,
-        source: 'razorpay_refund',
-        sourceId,
-        metadata: {
-            paymentId,
-            razorpayRefundId: razorpayRefundId || null,
-            razorpayPaymentId,
-            razorpayOrderId,
-            ...(metadata || {}),
-        },
-    });
-
-    if (!ledgerResult.created) {
-        return { reversed: false, reason: 'already_processed' };
+    const entryId = createDeterministicLedgerEntryId(sourceId);
+    const now = nowIso();
+    try {
+        await ddb.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: WALLET_TABLE,
+                        Key: { userId },
+                        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) - :credits, updatedAt = :now',
+                        ExpressionAttributeValues: {
+                            ':zero': 0,
+                            ':credits': creditsToReverse,
+                            ':now': now,
+                        },
+                    },
+                },
+                {
+                    Put: {
+                        TableName: LEDGER_TABLE,
+                        Item: {
+                            userId,
+                            entryId,
+                            type: 'reversal',
+                            credits: creditsToReverse,
+                            source: 'razorpay_refund',
+                            sourceId,
+                            metadata: {
+                                paymentId,
+                                razorpayRefundId: razorpayRefundId || null,
+                                razorpayPaymentId,
+                                razorpayOrderId,
+                                ...(metadata || {}),
+                            },
+                            createdAt: now,
+                        },
+                        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                    },
+                },
+                {
+                    Update: {
+                        TableName: PAYMENTS_TABLE,
+                        Key: { paymentId },
+                        UpdateExpression: 'SET #status = :status, updatedAt = :now',
+                        ExpressionAttributeNames: { '#status': 'status' },
+                        ExpressionAttributeValues: {
+                            ':status': 'refunded',
+                            ':now': now,
+                        },
+                    },
+                },
+            ],
+        }));
+    } catch (err) {
+        if (err.name === 'TransactionCanceledException') {
+            const duplicate = (err.CancellationReasons || [])
+                .some((reason) => reason?.Code === 'ConditionalCheckFailed');
+            if (duplicate) {
+                return { reversed: false, reason: 'already_processed' };
+            }
+        }
+        throw err;
     }
 
-    await ddb.send(new UpdateCommand({
-        TableName: WALLET_TABLE,
-        Key: { userId },
-        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) - :credits, updatedAt = :now',
-        ExpressionAttributeValues: {
-            ':zero': 0,
-            ':credits': creditsToReverse,
-            ':now': nowIso(),
-        },
-    }));
-
-    await ddb.send(new UpdateCommand({
-        TableName: PAYMENTS_TABLE,
-        Key: { paymentId },
-        UpdateExpression: 'SET #status = :status, updatedAt = :now',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-            ':status': 'refunded',
-            ':now': nowIso(),
-        },
-    }));
+    await incrementMetrics({
+        totalOutstandingCredits: -creditsToReverse,
+        creditsReversed: creditsToReverse,
+        paymentsRefunded: 1,
+    });
 
     return { reversed: true, creditsReversed: creditsToReverse };
 }
 
+async function getReversedCreditsForPayment({ userId, paymentId }) {
+    let lastEvaluatedKey;
+    let total = 0;
+    do {
+        const page = await ddb.send(new QueryCommand({
+            TableName: LEDGER_TABLE,
+            KeyConditionExpression: 'userId = :userId',
+            ExpressionAttributeValues: { ':userId': userId },
+            ProjectionExpression: '#source, metadata, credits',
+            ExpressionAttributeNames: { '#source': 'source' },
+            ExclusiveStartKey: lastEvaluatedKey,
+            ScanIndexForward: false,
+        }));
+        for (const entry of page.Items || []) {
+            if (entry.source === 'razorpay_refund' && entry?.metadata?.paymentId === paymentId) {
+                total += Number(entry.credits || 0);
+            }
+        }
+        lastEvaluatedKey = page.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+    return total;
+}
+
 async function getAdminBillingSummary() {
     validateTables();
-    const metrics = await ddb.send(new GetCommand({
-        TableName: METRICS_TABLE,
-        Key: { metricKey: METRICS_KEY },
-    }));
-    const m = metrics.Item || {};
+    const walletRollup = await getWalletRollup();
+    const paymentRollup = await getPaymentsRollup();
+    const ledgerRollup = await getLedgerRollup();
+    const grossRevenueFromLedger = sumRevenueForCapturedPayments(paymentRollup.amountByPaymentId, ledgerRollup.capturedPaymentIds);
+    const updatedAt = maxIsoDate(walletRollup.updatedAt, paymentRollup.updatedAt, ledgerRollup.updatedAt) || nowIso();
 
     return {
-        usersWithWallets: Number(m.usersWithWallets || 0),
-        totalOutstandingCredits: Number(m.totalOutstandingCredits || 0),
-        creditsSold: Number(m.creditsSold || 0),
-        creditsConsumed: Number(m.creditsConsumed || 0),
-        creditsReversed: Number(m.creditsReversed || 0),
-        grossRevenueInr: Number(m.grossRevenueInr || 0),
-        paymentsCaptured: Number(m.paymentsCaptured || 0),
-        paymentsRefunded: Number(m.paymentsRefunded || 0),
-        updatedAt: nowIso(),
+        usersWithWallets: walletRollup.usersWithWallets,
+        totalOutstandingCredits: walletRollup.totalOutstandingCredits,
+        // Ledger entries are source-of-truth for granted/reversed credits.
+        creditsSold: ledgerRollup.creditsSold,
+        creditsConsumed: ledgerRollup.creditsConsumed,
+        creditsReversed: ledgerRollup.creditsReversed,
+        grossRevenueInr: grossRevenueFromLedger,
+        paymentsCaptured: ledgerRollup.paymentsCaptured,
+        paymentsRefunded: ledgerRollup.paymentsRefunded,
+        updatedAt,
     };
+}
+
+async function getWalletRollup() {
+    let lastEvaluatedKey;
+    const totals = {
+        usersWithWallets: 0,
+        totalOutstandingCredits: 0,
+        updatedAt: null,
+    };
+
+    do {
+        const page = await ddb.send(new ScanCommand({
+            TableName: WALLET_TABLE,
+            ProjectionExpression: 'userId, balanceCredits, updatedAt',
+            ExclusiveStartKey: lastEvaluatedKey,
+        }));
+
+        for (const wallet of page.Items || []) {
+            totals.usersWithWallets += 1;
+            totals.totalOutstandingCredits += Number(wallet.balanceCredits || 0);
+            if (wallet.updatedAt && (!totals.updatedAt || wallet.updatedAt > totals.updatedAt)) {
+                totals.updatedAt = wallet.updatedAt;
+            }
+        }
+        lastEvaluatedKey = page.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    return totals;
+}
+
+async function getPaymentsRollup() {
+    let lastEvaluatedKey;
+    const totals = {
+        amountByPaymentId: {},
+        updatedAt: null,
+    };
+
+    do {
+        const page = await ddb.send(new ScanCommand({
+            TableName: PAYMENTS_TABLE,
+            ProjectionExpression: 'paymentId, #status, amountInr, creditsGranted, updatedAt',
+            ExpressionAttributeNames: {
+                '#status': 'status',
+            },
+            ExclusiveStartKey: lastEvaluatedKey,
+        }));
+
+        for (const payment of page.Items || []) {
+            const amount = Number(payment.amountInr || 0);
+            if (payment.paymentId) totals.amountByPaymentId[payment.paymentId] = amount;
+            if (payment.updatedAt && (!totals.updatedAt || payment.updatedAt > totals.updatedAt)) {
+                totals.updatedAt = payment.updatedAt;
+            }
+        }
+
+        lastEvaluatedKey = page.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    return totals;
+}
+
+async function getLedgerRollup() {
+    let lastEvaluatedKey;
+    const capturedPaymentIds = new Set();
+    const soldByPayment = new Map();
+    const reversedByPayment = new Map();
+    let usageDebit = 0;
+    let usageCredit = 0;
+    let updatedAt = null;
+
+    do {
+        const page = await ddb.send(new ScanCommand({
+            TableName: LEDGER_TABLE,
+            ProjectionExpression: 'entryId, #type, #source, metadata, credits, createdAt',
+            ExpressionAttributeNames: {
+                '#type': 'type',
+                '#source': 'source',
+            },
+            ExclusiveStartKey: lastEvaluatedKey,
+        }));
+
+        for (const entry of page.Items || []) {
+            const source = String(entry.source || '');
+            const credits = Number(entry.credits || 0);
+            if (source === 'razorpay_order') {
+                const pid = entry?.metadata?.paymentId;
+                if (pid) {
+                    capturedPaymentIds.add(pid);
+                    soldByPayment.set(pid, (soldByPayment.get(pid) || 0) + credits);
+                }
+            } else if (source === 'razorpay_refund') {
+                const pid = entry?.metadata?.paymentId;
+                if (pid) {
+                    reversedByPayment.set(pid, (reversedByPayment.get(pid) || 0) + credits);
+                }
+            } else if (source.startsWith('ai_usage_')) {
+                if (entry.type === 'debit') usageDebit += credits;
+                else if (entry.type === 'credit') usageCredit += credits;
+            }
+            if (entry.createdAt && (!updatedAt || entry.createdAt > updatedAt)) {
+                updatedAt = entry.createdAt;
+            }
+        }
+
+        lastEvaluatedKey = page.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    let creditsSold = 0;
+    for (const sold of soldByPayment.values()) creditsSold += sold;
+
+    // Cap reversal per payment to sold credits for that payment, making metrics resilient
+    // against historical duplicates or webhook noise.
+    let creditsReversed = 0;
+    const refundedPaymentIds = new Set();
+    for (const [paymentId, reversed] of reversedByPayment.entries()) {
+        const sold = soldByPayment.get(paymentId) || 0;
+        const effectiveReversal = Math.max(0, Math.min(reversed, sold));
+        if (effectiveReversal > 0) refundedPaymentIds.add(paymentId);
+        creditsReversed += effectiveReversal;
+    }
+
+    return {
+        creditsSold,
+        creditsConsumed: Math.max(0, usageDebit - usageCredit),
+        creditsReversed,
+        paymentsCaptured: capturedPaymentIds.size,
+        paymentsRefunded: refundedPaymentIds.size,
+        capturedPaymentIds,
+        updatedAt,
+    };
+}
+
+function sumRevenueForCapturedPayments(amountByPaymentId, capturedPaymentIds) {
+    let total = 0;
+    for (const paymentId of capturedPaymentIds || []) {
+        total += Number(amountByPaymentId[paymentId] || 0);
+    }
+    return total;
+}
+
+function maxIsoDate(...candidates) {
+    const vals = candidates.filter(Boolean);
+    if (!vals.length) return null;
+    return vals.sort().at(-1) || null;
 }
 
 module.exports = {

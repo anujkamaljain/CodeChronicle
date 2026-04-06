@@ -35,7 +35,7 @@ module.exports.explain = async (event) => {
         const { filePath, fileHash, metrics, dependencies, dependents, fileContent, detailed, relationship } = body;
 
         if (relationship) {
-            return handleRelationshipExplain(relationship);
+            return handleRelationshipExplain(relationship, auth.user.email);
         }
 
         if (!filePath || !fileHash) {
@@ -60,7 +60,8 @@ module.exports.explain = async (event) => {
             ? buildDetailedSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents })
             : buildSummaryPrompt({ filePath, fileContent, metrics, dependencies, dependents });
 
-        const maxTokens = detailed ? 4096 : 1024;
+        // Keep synchronous requests bounded to reduce API timeout risk.
+        const maxTokens = detailed ? 2200 : 700;
 
         const usageId = randomUUID();
         const reservedCredits = estimateMaxCreditsForRequest(prompt.length, maxTokens);
@@ -73,7 +74,7 @@ module.exports.explain = async (event) => {
                 metadata: { filePath, detailed: !!detailed, maxTokens },
             });
         } catch (billingErr) {
-            if (billingErr.name === 'ConditionalCheckFailedException') {
+            if (billingErr.name === 'ConditionalCheckFailedException' || billingErr.name === 'TransactionCanceledException') {
                 return response(402, { error: 'Insufficient credits. Please buy more credits to continue.' });
             }
             throw billingErr;
@@ -126,7 +127,7 @@ module.exports.explain = async (event) => {
 
     } catch (err) {
         console.error('Explain error:', err);
-        return response(500, { error: 'Failed to generate summary.', details: err.message });
+        return response(500, { error: 'Failed to generate summary. Please try again later.' });
     }
 };
 
@@ -170,7 +171,7 @@ module.exports.query = async (event) => {
                 metadata: { queryLength: query.length, maxTokens: 2048 },
             });
         } catch (billingErr) {
-            if (billingErr.name === 'ConditionalCheckFailedException') {
+            if (billingErr.name === 'ConditionalCheckFailedException' || billingErr.name === 'TransactionCanceledException') {
                 return response(402, { error: 'Insufficient credits. Please buy more credits to continue.' });
             }
             throw billingErr;
@@ -227,7 +228,7 @@ module.exports.query = async (event) => {
 
     } catch (err) {
         console.error('Query error:', err);
-        return response(500, { error: 'Failed to process query.', details: err.message });
+        return response(500, { error: 'Failed to process query. Please try again later.' });
     }
 };
 
@@ -327,7 +328,7 @@ Provide concrete, actionable suggestions for refactoring, performance improvemen
 Write each section with 3-5 detailed sentences. Be specific — reference actual code constructs when possible.`;
 }
 
-async function handleRelationshipExplain(rel) {
+async function handleRelationshipExplain(rel, userId) {
     const { sourceFile, targetFile, cacheKey } = rel;
     if (!sourceFile?.path || !targetFile?.path) {
         return response(400, { error: 'relationship requires sourceFile and targetFile with path.' });
@@ -338,9 +339,52 @@ async function handleRelationshipExplain(rel) {
         return response(200, { summary: cached.summary, cached: true, timestamp: cached.timestamp });
     }
 
+    const sourceId = `relationship_${cacheKey || `${sourceFile.path}:${targetFile.path}`}_${Date.now()}`;
     const prompt = buildRelationshipPrompt(rel);
-    const aiResponse = await invokeModel(prompt, 2048);
+    const estimatedCredits = estimateMaxCreditsForRequest(prompt.length, 2048);
+
+    try {
+        await reserveCreditsForUsage({
+            userId,
+            credits: estimatedCredits,
+            source: 'ai_relationship_explain',
+            sourceId,
+            metadata: { sourceFile: sourceFile.path, targetFile: targetFile.path },
+        });
+    } catch (billingErr) {
+        if (billingErr.name === 'ConditionalCheckFailedException' || billingErr.name === 'TransactionCanceledException') {
+            return response(402, { error: 'Insufficient credits. Please buy more credits to continue.' });
+        }
+        throw billingErr;
+    }
+
+    let aiResponse;
+    try {
+        aiResponse = await invokeModel(prompt, 2048);
+    } catch (invokeErr) {
+        const refundCredits = estimatedCredits;
+        await creditAdjustment({
+            userId,
+            credits: refundCredits,
+            source: 'ai_relationship_explain_refund',
+            sourceId: `${sourceId}_refund`,
+            metadata: { reason: 'invoke_failed' },
+        }).catch(() => {});
+        throw invokeErr;
+    }
     const summary = aiResponse.text.trim();
+
+    const actualCredits = calculateCreditsToDebit(aiResponse.inputTokens || 0, aiResponse.outputTokens || 0);
+    const refund = estimatedCredits - actualCredits;
+    if (refund > 0) {
+        await creditAdjustment({
+            userId,
+            credits: refund,
+            source: 'ai_relationship_explain_reconciliation',
+            sourceId: `${sourceId}_reconciliation`,
+            metadata: { estimated: estimatedCredits, actual: actualCredits },
+        }).catch(() => {});
+    }
 
     await cacheSummary(cacheKey, `${sourceFile.path}|${targetFile.path}`, summary);
 

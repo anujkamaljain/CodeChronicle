@@ -9,6 +9,7 @@ const {
     ensureUserWallet,
     getWalletWithHistory,
     createPendingPayment,
+    getPaymentById,
     grantCreditsForSuccessfulPayment,
     reverseCreditsForRefund,
     getAdminBillingSummary,
@@ -64,7 +65,7 @@ module.exports.getWallet = async (event) => {
         return response(200, wallet);
     } catch (err) {
         console.error('getWallet error:', err);
-        return response(500, { error: 'Failed to fetch wallet.', details: err.message });
+        return response(500, { error: 'Failed to fetch wallet. Please try again later.' });
     }
 };
 
@@ -124,7 +125,7 @@ module.exports.createOrder = async (event) => {
         });
     } catch (err) {
         console.error('createOrder error:', err);
-        return response(500, { error: 'Failed to create payment order.', details: err.message });
+        return response(500, { error: 'Failed to create payment order. Please try again later.' });
     }
 };
 
@@ -144,7 +145,12 @@ module.exports.razorpayWebhook = async (event) => {
             .createHmac('sha256', RAZORPAY_WEBHOOK_SECRET)
             .update(bodyStr)
             .digest('hex');
-        const valid = crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(String(signature), 'utf8'));
+        const expectedBuf = Buffer.from(expected, 'utf8');
+        const receivedBuf = Buffer.from(String(signature), 'utf8');
+        if (expectedBuf.length !== receivedBuf.length) {
+            return response(401, { error: 'Invalid webhook signature.' });
+        }
+        const valid = crypto.timingSafeEqual(expectedBuf, receivedBuf);
         if (!valid) {
             return response(401, { error: 'Invalid webhook signature.' });
         }
@@ -156,21 +162,42 @@ module.exports.razorpayWebhook = async (event) => {
                 return response(400, { error: 'Malformed payment payload.' });
             }
 
-            const userId = paymentEntity?.notes?.userEmail;
-            const planId = paymentEntity?.notes?.planId;
+            let resolvedPayment = paymentEntity;
+            if (!resolvedPayment?.notes?.userEmail || !resolvedPayment?.notes?.planId) {
+                try {
+                    resolvedPayment = await razorpay.payments.fetch(paymentEntity.id);
+                } catch (fetchErr) {
+                    console.error('Failed to resolve payment notes for captured webhook:', fetchErr);
+                }
+            }
+
+            const paymentId = `pay_${resolvedPayment.order_id}`;
+            const pendingPayment = await getPaymentById(paymentId);
+            const userId = pendingPayment?.userId || resolvedPayment?.notes?.userEmail;
+            const planId = pendingPayment?.planId || resolvedPayment?.notes?.planId;
             if (!userId || !planId) {
                 return response(400, { error: 'Missing user/plan metadata in payment notes.' });
             }
 
-            const paymentId = `pay_${paymentEntity.order_id}`;
+            if (pendingPayment?.razorpayOrderId && pendingPayment.razorpayOrderId !== resolvedPayment.order_id) {
+                return response(400, { error: 'Payment order mismatch.' });
+            }
+            if (
+                Number.isFinite(Number(pendingPayment?.amountInr)) &&
+                Number(pendingPayment.amountInr) > 0 &&
+                Number(pendingPayment.amountInr) !== Number(resolvedPayment.amount || 0) / 100
+            ) {
+                return response(400, { error: 'Payment amount mismatch.' });
+            }
+
             const grant = await grantCreditsForSuccessfulPayment({
                 paymentId,
                 userId,
                 planId,
-                amountInr: Number(paymentEntity.amount || 0) / 100,
-                razorpayPaymentId: paymentEntity.id,
-                razorpayOrderId: paymentEntity.order_id,
-                metadata: { eventId: body?.payload?.payment?.entity?.id },
+                amountInr: Number(resolvedPayment.amount || 0) / 100,
+                razorpayPaymentId: resolvedPayment.id,
+                razorpayOrderId: resolvedPayment.order_id,
+                metadata: { eventId: body?.payload?.payment?.entity?.id || resolvedPayment.id },
             });
 
             return response(200, { ok: true, grant });
@@ -201,7 +228,10 @@ module.exports.razorpayWebhook = async (event) => {
                 razorpayRefundId: refundEntity?.id,
                 razorpayPaymentId: resolvedPayment.id,
                 razorpayOrderId: resolvedPayment.order_id,
-                metadata: { eventId: refundEntity?.id || resolvedPayment.id },
+                metadata: {
+                    eventId: refundEntity?.id || resolvedPayment.id,
+                    refundAmountInr: Number(refundEntity?.amount || 0) / 100,
+                },
             });
 
             return response(200, { ok: true, reversal });
@@ -210,7 +240,7 @@ module.exports.razorpayWebhook = async (event) => {
         return response(200, { ok: true, ignored: true, eventType });
     } catch (err) {
         console.error('razorpayWebhook error:', err);
-        return response(500, { error: 'Webhook processing failed.', details: err.message });
+        return response(500, { error: 'Webhook processing failed.' });
     }
 };
 
@@ -232,6 +262,6 @@ module.exports.adminBillingSummary = async (event) => {
         return response(200, summary);
     } catch (err) {
         console.error('adminBillingSummary error:', err);
-        return response(500, { error: 'Failed to fetch admin billing summary.', details: err.message });
+        return response(500, { error: 'Failed to fetch admin billing summary. Please try again later.' });
     }
 };

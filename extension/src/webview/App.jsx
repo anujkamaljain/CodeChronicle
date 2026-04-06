@@ -105,8 +105,9 @@ export default function App({ vscode }) {
         setCloudStatus, setError, addQueryToHistory, selectedNode,
         sidebarOpen, blastRadiusMode, setHighlightedNodes, setLoading,
         setLoadingRisk, setLoadingBlast, isLoading, setLoadingSummary,
-        addToast, prevTabIndex, setAiProgress,
+        addToast, prevTabIndex, setAiProgress, setWalletCredits,
     } = useStore();
+    const lastFallbackToastRef = useRef({ key: '', at: 0 });
 
     // Listen for messages from the extension host
     useEffect(() => {
@@ -160,7 +161,9 @@ export default function App({ vscode }) {
                 case 'queryResult':
                     setQueryResult(message.result);
                     setLoading(false);
-                    addToast('AI query complete', 'success');
+                    if (!message.isFallback) {
+                        addToast('AI query complete', 'success');
+                    }
                     break;
 
                 case 'detailedSummary':
@@ -191,9 +194,30 @@ export default function App({ vscode }) {
                     setCloudStatus(message.status);
                     break;
 
+                case 'cloudFallback': {
+                    const key = `${message.reasonCode}:${message.message || ''}`;
+                    const now = Date.now();
+                    const last = lastFallbackToastRef.current;
+                    // Prevent toast spam from repeated retries/fallbacks.
+                    if (last.key !== key || now - last.at > 5000) {
+                        addToast(
+                            message.message || 'Cloud request failed. Local analysis is shown as fallback.',
+                            message.severity === 'warning' ? 'warning' : 'error',
+                            5000
+                        );
+                        lastFallbackToastRef.current = { key, at: now };
+                    }
+                    break;
+                }
+
+                case 'wallet':
+                    setWalletCredits(message.balanceCredits);
+                    break;
+
                 case 'error':
                     setError(message.message);
                     setLoading(false);
+                    useStore.getState().setQueryLoading(false);
                     setAiProgress(null);
                     addToast(message.message, 'error');
                     break;
@@ -218,6 +242,7 @@ export default function App({ vscode }) {
     }, [vscode]);
 
     const handleQuery = useCallback((query) => {
+        useStore.getState().setQueryLoading(true);
         setLoading(true, 'Querying AI...');
         vscode.postMessage({ type: 'query', query });
     }, [vscode]);
@@ -229,6 +254,14 @@ export default function App({ vscode }) {
     const handleRefresh = useCallback(() => {
         setLoading(true, 'Rescanning workspace...');
         vscode.postMessage({ type: 'refresh' });
+    }, [vscode]);
+
+    const handleViewCredits = useCallback(() => {
+        vscode.postMessage({ type: 'viewCredits' });
+    }, [vscode]);
+
+    const handleBuyCredits = useCallback(() => {
+        vscode.postMessage({ type: 'buyCredits' });
     }, [vscode]);
 
     const handleRequestRisk = useCallback((nodeId) => {
@@ -478,7 +511,7 @@ export default function App({ vscode }) {
             <RelationshipModal />
 
             {/* Bottom status bar */}
-            <StatusBar />
+            <StatusBar onViewCredits={handleViewCredits} onBuyCredits={handleBuyCredits} />
 
             {/* Toast notifications */}
             <ToastContainer />
