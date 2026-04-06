@@ -70,6 +70,7 @@ function initCoreComponents(context) {
     state.blastRadiusEngine = new BlastRadiusEngine();
     state.cacheManager = new CacheManager(context.globalStorageUri);
     state.apiClient = new APIClient(config);
+    state.apiClient.setAuthToken(authService?.token || null);
 
     webviewProvider = new GraphWebviewProvider(context.extensionUri, state);
 
@@ -164,6 +165,9 @@ function activate(context) {
             if (!state.scanner) {
                 initCoreComponents(context);
             }
+            if (state.apiClient) {
+                state.apiClient.setAuthToken(authService?.token || null);
+            }
             vscode.window.showInformationMessage(
                 `CodeChronicle: Welcome${event.user?.name ? ', ' + event.user.name : ''}!`
             );
@@ -177,6 +181,9 @@ function activate(context) {
             }
             state.graph = null;
             state.scanner = null;
+            if (state.apiClient) {
+                state.apiClient.setAuthToken(null);
+            }
         }
     });
 
@@ -187,6 +194,9 @@ function activate(context) {
             console.log('CodeChronicle: Restored session for', authService.user?.email);
             if (!state.scanner) {
                 initCoreComponents(context);
+            }
+            if (state.apiClient) {
+                state.apiClient.setAuthToken(authService?.token || null);
             }
             updateStatusBar('ready');
         } else {

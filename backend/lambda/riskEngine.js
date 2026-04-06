@@ -1,6 +1,7 @@
 const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { authenticateRequest } = require('./authz');
 
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -8,12 +9,18 @@ const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-lite-v1:0';
 const RISKS_TABLE = process.env.RISKS_TABLE;
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
 // ========================================
 // POST /ai/risk-score
 // ========================================
 module.exports.assessRisk = async (event) => {
     try {
+        const auth = await authenticateRequest(event);
+        if (!auth.ok) {
+            return response(auth.statusCode, auth.body);
+        }
+
         const body = JSON.parse(event.body || '{}');
         const { filePath, fileHash, metrics, dependencies, dependents, fileContent } = body;
 
@@ -176,8 +183,8 @@ function response(statusCode, body) {
         statusCode,
         headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
         body: JSON.stringify(body),
     };

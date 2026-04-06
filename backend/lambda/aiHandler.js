@@ -1,19 +1,29 @@
 const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { authenticateRequest } = require('./authz');
 
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-lite-v1:0';
 const SUMMARIES_TABLE = process.env.SUMMARIES_TABLE;
+const AI_USAGE_TABLE = process.env.AI_USAGE_TABLE;
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const USAGE_TTL_SECONDS = 32 * 24 * 60 * 60; // 32 days
+const AI_QUERY_DAILY_LIMIT = Number(process.env.AI_QUERY_DAILY_LIMIT || 200);
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
 // ========================================
 // POST /ai/explain
 // ========================================
 module.exports.explain = async (event) => {
     try {
+        const auth = await authenticateRequest(event);
+        if (!auth.ok) {
+            return response(auth.statusCode, auth.body);
+        }
+
         const body = JSON.parse(event.body || '{}');
         const { filePath, fileHash, metrics, dependencies, dependents, fileContent, detailed, relationship } = body;
 
@@ -70,11 +80,27 @@ module.exports.explain = async (event) => {
 // ========================================
 module.exports.query = async (event) => {
     try {
+        const auth = await authenticateRequest(event);
+        if (!auth.ok) {
+            return response(auth.statusCode, auth.body);
+        }
+
         const body = JSON.parse(event.body || '{}');
         const { query, graphContext, maxResults } = body;
 
         if (!query) {
             return response(400, { error: 'query is required.' });
+        }
+        if (String(query).length > 2000) {
+            return response(400, { error: 'Query is too long. Please keep it under 2000 characters.' });
+        }
+
+        const usage = await consumeDailyQuota(auth.user.email);
+        if (!usage.allowed) {
+            return response(429, {
+                error: `Daily AI query limit reached (${AI_QUERY_DAILY_LIMIT}).`,
+                retryAt: usage.retryAt,
+            });
         }
 
         const prompt = buildQueryPrompt({ query, graphContext, maxResults });
@@ -347,9 +373,43 @@ function response(statusCode, body) {
         statusCode,
         headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
         body: JSON.stringify(body),
     };
+}
+
+async function consumeDailyQuota(ownerId) {
+    const day = new Date().toISOString().slice(0, 10);
+    const pk = `${ownerId}#${day}`;
+    const now = Date.now();
+    const tomorrow = new Date(day);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    try {
+        await dynamoClient.send(new UpdateCommand({
+            TableName: AI_USAGE_TABLE,
+            Key: { usageKey: pk },
+            UpdateExpression: 'SET requestCount = if_not_exists(requestCount, :zero) + :one, ownerId = :ownerId, usageDate = :usageDate, updatedAt = :updatedAt, #ttl = :ttl',
+            ConditionExpression: 'attribute_not_exists(requestCount) OR requestCount < :limit',
+            ExpressionAttributeNames: { '#ttl': 'ttl' },
+            ExpressionAttributeValues: {
+                ':zero': 0,
+                ':one': 1,
+                ':limit': AI_QUERY_DAILY_LIMIT,
+                ':ownerId': ownerId,
+                ':usageDate': day,
+                ':updatedAt': new Date().toISOString(),
+                ':ttl': Math.floor((now + USAGE_TTL_SECONDS * 1000) / 1000),
+            },
+        }));
+        return { allowed: true };
+    } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+            return { allowed: false, retryAt: tomorrow.toISOString() };
+        }
+        console.error('Sync query quota update failed (fail-open):', err);
+        return { allowed: true };
+    }
 }

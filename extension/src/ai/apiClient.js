@@ -1,3 +1,4 @@
+const vscode = require('vscode');
 // ============================================================
 // IMPORTANT: Replace this URL after running `npx serverless deploy`
 // in the backend/ folder. The deploy output will give you the URL.
@@ -25,11 +26,21 @@ class APIClient {
         this.enabled = config.get('enableCloudAI') !== false && !!this.endpoint;
         this.maxRetries = 2;
         this.baseDelay = 1000;
+        this.clientId = vscode.env.machineId || 'unknown-client';
+        this.authToken = null;
 
         // Circuit-breaker state
         this._circuitOpen = false;
         this._circuitOpenedAt = 0;
         this._consecutiveFailures = 0;
+    }
+
+    /**
+     * Attach current auth token for backend-protected routes.
+     * @param {string|null|undefined} token
+     */
+    setAuthToken(token) {
+        this.authToken = token && typeof token === 'string' ? token : null;
     }
 
     /**
@@ -182,15 +193,74 @@ class APIClient {
         if (!this.isAvailable()) {
             throw new Error('Cloud AI is currently unavailable.');
         }
+        const payload = {
+            query: request.query,
+            graphContext: request.graphContext,
+            maxResults: request.maxResults,
+        };
 
-        return this.makeRequest('/ai/query', {
-            method: 'POST',
-            body: {
-                query: request.query,
-                graphContext: request.graphContext,
-                maxResults: request.maxResults,
-            },
-        });
+        try {
+            return await this.processQueryAsync(payload);
+        } catch (err) {
+            // Backward-compatible fallback if async endpoints are unavailable.
+            const msg = err?.message || '';
+            if (msg.includes('404') || msg.includes('429') || msg.includes('501') || msg.includes('503')) {
+                return this.makeRequest('/ai/query', { method: 'POST', body: payload });
+            }
+            throw err;
+        }
+    }
+
+    /**
+     * Submit async query job and poll for completion.
+     * @param {{query: string, graphContext: Object, maxResults: number}} payload
+     * @returns {Promise<{answer: string, references: Array, suggestedQuestions: string[], confidence: number}>}
+     */
+    async processQueryAsync(payload) {
+        let submit;
+        try {
+            submit = await this.makeRequest('/ai/query/async', {
+                method: 'POST',
+                body: payload,
+            });
+        } catch (err) {
+            const msg = err?.message || '';
+            // Preserve HTTP semantics for fallback decisions in processQuery().
+            if (msg.includes('API error: 429')) {
+                throw new Error('429 async quota/backpressure');
+            }
+            if (msg.includes('API error: 404')) {
+                throw new Error('404 async endpoint not found');
+            }
+            if (msg.includes('API error: 501') || msg.includes('API error: 503')) {
+                throw new Error('503 async endpoint unavailable');
+            }
+            throw err;
+        }
+
+        if (!submit?.jobId) {
+            throw new Error('Async query submission failed: missing jobId.');
+        }
+
+        const startedAt = Date.now();
+        const maxWaitMs = 30000;
+        let waitMs = submit.pollAfterMs || 1000;
+
+        while (Date.now() - startedAt < maxWaitMs) {
+            await this.sleep(waitMs);
+
+            const status = await this.makeRequest(`/ai/jobs/${submit.jobId}`, { method: 'GET' });
+            if (status?.status === 'completed') {
+                return status.result;
+            }
+            if (status?.status === 'failed') {
+                throw new Error(status.error || 'AI job failed.');
+            }
+
+            waitMs = Math.min(waitMs + 500, 2500);
+        }
+
+        throw new Error('AI query is taking longer than expected. Please try again.');
     }
 
     /**
@@ -225,8 +295,12 @@ class APIClient {
                     method: options.method || 'GET',
                     headers: {
                         'Content-Type': 'application/json',
+                        'x-cc-client-id': this.clientId,
                     },
                 };
+                if (this.authToken) {
+                    fetchOptions.headers.Authorization = `Bearer ${this.authToken}`;
+                }
 
                 if (options.body) {
                     fetchOptions.body = JSON.stringify(options.body);

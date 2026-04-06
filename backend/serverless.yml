@@ -16,6 +16,19 @@ provider:
     SUMMARIES_TABLE: ${self:service}-summaries-${self:provider.stage}
     RISKS_TABLE: ${self:service}-risks-${self:provider.stage}
     USERS_TABLE: ${self:service}-users-${self:provider.stage}
+    AI_JOBS_TABLE: ${self:service}-ai-jobs-${self:provider.stage}
+    AI_USAGE_TABLE: ${self:service}-ai-usage-${self:provider.stage}
+    AI_QUERY_QUEUE_URL:
+      Ref: AIQueryQueue
+    AI_QUERY_MAX_BACKLOG: 2000
+    AI_QUERY_MAX_RESULTS: 10
+    AI_QUERY_MAX_FILES: 10
+    AI_QUERY_MAX_PROMPT_CHARS: 120000
+    AI_QUERY_MAX_CONTENT_PER_FILE: 12000
+    AI_QUERY_MAX_TOKENS: 1200
+    AI_QUERY_DAILY_LIMIT: 200
+    AI_ASYNC_ENABLED: true
+    ALLOWED_ORIGIN: ${env:ALLOWED_ORIGIN, '*'}
     STAGE: ${self:provider.stage}
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-production-use-ssm'}
     JWT_EXPIRY: '7d'
@@ -47,6 +60,18 @@ provider:
             - !GetAtt SummariesTable.Arn
             - !GetAtt RisksTable.Arn
             - !GetAtt UsersTable.Arn
+            - !GetAtt AIJobsTable.Arn
+            - !GetAtt AIUsageTable.Arn
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            - sqs:ChangeMessageVisibility
+          Resource:
+            - !GetAtt AIQueryQueue.Arn
+            - !GetAtt AIQueryDLQ.Arn
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
@@ -123,6 +148,31 @@ functions:
           method: POST
     timeout: 29
 
+  aiQueryAsyncSubmit:
+    handler: lambda/aiJobs.submitQueryJob
+    events:
+      - httpApi:
+          path: /ai/query/async
+          method: POST
+    timeout: 29
+
+  aiJobStatus:
+    handler: lambda/aiJobs.getJobStatus
+    events:
+      - httpApi:
+          path: /ai/jobs/{jobId}
+          method: GET
+    timeout: 29
+
+  aiQueryWorker:
+    handler: lambda/aiJobs.processQueryJob
+    timeout: 29
+    events:
+      - sqs:
+          arn: !GetAtt AIQueryQueue.Arn
+          batchSize: 5
+          maximumConcurrency: 20
+
   cacheGet:
     handler: lambda/cacheService.get
     events:
@@ -193,3 +243,48 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
+
+    AIJobsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.AI_JOBS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: jobId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: jobId
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    AIUsageTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.AI_USAGE_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: usageKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: usageKey
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    AIQueryDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-ai-query-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600
+
+    AIQueryQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-ai-query-${self:provider.stage}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt AIQueryDLQ.Arn
+          maxReceiveCount: 3
