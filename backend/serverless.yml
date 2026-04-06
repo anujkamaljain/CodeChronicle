@@ -40,6 +40,7 @@ provider:
     CREDITS_LEDGER_TABLE: ${self:service}-credits-ledger-${self:provider.stage}
     CREDITS_PAYMENTS_TABLE: ${self:service}-credits-payments-${self:provider.stage}
     CREDITS_METRICS_TABLE: ${self:service}-credits-metrics-${self:provider.stage}
+    CREDITS_COUPONS_TABLE: ${self:service}-credits-coupons-${self:provider.stage}
     FREE_TRIAL_CREDITS: ${env:FREE_TRIAL_CREDITS, '25'}
     CREDIT_PRICE_INR: ${env:CREDIT_PRICE_INR, '1'}
     CREDIT_COST_SAFETY_MULTIPLIER: ${env:CREDIT_COST_SAFETY_MULTIPLIER, '1.2'}
@@ -92,6 +93,7 @@ provider:
             - !GetAtt CreditsLedgerTable.Arn
             - !GetAtt CreditsPaymentsTable.Arn
             - !GetAtt CreditsMetricsTable.Arn
+            - !GetAtt CreditsCouponsTable.Arn
             - !Sub '${CreditsLedgerTable.Arn}/index/*'
             - !Sub '${CreditsPaymentsTable.Arn}/index/*'
         - Effect: Allow
@@ -261,6 +263,22 @@ functions:
           method: GET
     timeout: 29
 
+  billingRedeemCoupon:
+    handler: lambda/billingHandler.redeemCoupon
+    events:
+      - httpApi:
+          path: /billing/redeem-coupon
+          method: POST
+    timeout: 29
+
+  billingAdminCreateCoupon:
+    handler: lambda/billingHandler.adminCreateCoupon
+    events:
+      - httpApi:
+          path: /billing/admin/coupons
+          method: POST
+    timeout: 29
+
 resources:
   Resources:
     UsersTable:
@@ -418,6 +436,18 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: metricKey
+            KeyType: HASH
+
+    CreditsCouponsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CREDITS_COUPONS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: couponCode
+            AttributeType: S
+        KeySchema:
+          - AttributeName: couponCode
             KeyType: HASH
 
     AIQueryDLQ:

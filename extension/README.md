@@ -17,6 +17,7 @@ AI-powered codebase analysis for VS Code with interactive dependency graphs, bla
 - If signed in, it opens website **`/billing`**.
 - If signed out, it opens website **`/login`** and then routes to billing.
 - Credits are tied to your account and sync with extension usage.
+- Coupon credits redeemed on website billing are also synced to the same account.
 - Purchased credits do not expire.
 
 ## Getting Started

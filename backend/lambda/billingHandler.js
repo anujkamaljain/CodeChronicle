@@ -13,6 +13,8 @@ const {
     grantCreditsForSuccessfulPayment,
     reverseCreditsForRefund,
     getAdminBillingSummary,
+    createCoupon,
+    redeemCoupon,
 } = require('./creditService');
 
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
@@ -48,6 +50,20 @@ function parseJsonBody(event) {
     const raw = event.body || '{}';
     const bodyStr = event.isBase64Encoded ? Buffer.from(raw, 'base64').toString('utf8') : raw;
     return { bodyStr, body: JSON.parse(bodyStr || '{}') };
+}
+
+async function authorizeAdmin(event) {
+    const adminKey = event?.headers?.['x-admin-key'] || event?.headers?.['X-Admin-Key'] || '';
+    if (ADMIN_API_KEY && adminKey === ADMIN_API_KEY) {
+        return { ok: true, user: { email: 'admin@internal' } };
+    }
+
+    const auth = await authenticateRequest(event);
+    if (!auth.ok) return auth;
+    if (!ADMIN_EMAILS.includes(String(auth.user.email || '').toLowerCase())) {
+        return { ok: false, statusCode: 403, body: { error: 'Admin access required.' } };
+    }
+    return auth;
 }
 
 module.exports.getPlans = async () => response(200, {
@@ -246,22 +262,72 @@ module.exports.razorpayWebhook = async (event) => {
 
 module.exports.adminBillingSummary = async (event) => {
     try {
-        const adminKey = event?.headers?.['x-admin-key'] || event?.headers?.['X-Admin-Key'] || '';
-        if (ADMIN_API_KEY && adminKey === ADMIN_API_KEY) {
-            const summary = await getAdminBillingSummary();
-            return response(200, summary);
-        }
-
-        const auth = await authenticateRequest(event);
+        const auth = await authorizeAdmin(event);
         if (!auth.ok) return response(auth.statusCode, auth.body);
-        if (!ADMIN_EMAILS.includes(String(auth.user.email || '').toLowerCase())) {
-            return response(403, { error: 'Admin access required.' });
-        }
 
         const summary = await getAdminBillingSummary();
         return response(200, summary);
     } catch (err) {
         console.error('adminBillingSummary error:', err);
         return response(500, { error: 'Failed to fetch admin billing summary. Please try again later.' });
+    }
+};
+
+module.exports.redeemCoupon = async (event) => {
+    try {
+        const auth = await authenticateRequest(event);
+        if (!auth.ok) return response(auth.statusCode, auth.body);
+
+        const { body } = parseJsonBody(event);
+        const code = String(body?.code || '').trim();
+        if (!code) {
+            return response(400, { error: 'Coupon code is required.' });
+        }
+
+        const result = await redeemCoupon({ userId: auth.user.email, code });
+        if (result.redeemed) {
+            return response(200, result);
+        }
+
+        if (result.reason === 'already_claimed') {
+            return response(409, { error: 'You have already claimed this coupon on your account.' });
+        }
+        if (result.reason === 'coupon_expired') {
+            return response(400, { error: 'This coupon has expired.' });
+        }
+        if (result.reason === 'coupon_exhausted') {
+            return response(400, { error: 'This coupon is no longer available.' });
+        }
+        return response(400, { error: 'Invalid coupon code.' });
+    } catch (err) {
+        console.error('redeemCoupon error:', err);
+        return response(500, { error: 'Failed to redeem coupon. Please try again later.' });
+    }
+};
+
+module.exports.adminCreateCoupon = async (event) => {
+    try {
+        const auth = await authorizeAdmin(event);
+        if (!auth.ok) return response(auth.statusCode, auth.body);
+
+        const { body } = parseJsonBody(event);
+        const coupon = await createCoupon({
+            code: body?.code,
+            credits: body?.credits,
+            maxClaims: body?.maxClaims,
+            expiresAt: body?.expiresAt,
+            description: body?.description,
+            createdBy: auth.user?.email || 'admin',
+        });
+        return response(200, { coupon });
+    } catch (err) {
+        console.error('adminCreateCoupon error:', err);
+        if (err.name === 'ConditionalCheckFailedException') {
+            return response(409, { error: 'Coupon code already exists.' });
+        }
+        if (String(err.message || '').toLowerCase().includes('coupon')) {
+            return response(400, { error: err.message });
+        }
+        return response(500, { error: 'Failed to create coupon. Please try again later.' });
     }
 };

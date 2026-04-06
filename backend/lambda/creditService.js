@@ -20,6 +20,7 @@ const WALLET_TABLE = process.env.CREDITS_WALLET_TABLE;
 const LEDGER_TABLE = process.env.CREDITS_LEDGER_TABLE;
 const PAYMENTS_TABLE = process.env.CREDITS_PAYMENTS_TABLE;
 const METRICS_TABLE = process.env.CREDITS_METRICS_TABLE;
+const COUPONS_TABLE = process.env.CREDITS_COUPONS_TABLE;
 const METRICS_KEY = 'global';
 
 const DEFAULT_FREE_CREDITS = Number(process.env.FREE_TRIAL_CREDITS || 25);
@@ -79,9 +80,13 @@ function createDeterministicLedgerEntryId(sourceId) {
 }
 
 function validateTables() {
-    if (!WALLET_TABLE || !LEDGER_TABLE || !PAYMENTS_TABLE || !METRICS_TABLE) {
+    if (!WALLET_TABLE || !LEDGER_TABLE || !PAYMENTS_TABLE || !METRICS_TABLE || !COUPONS_TABLE) {
         throw new Error('Credit tables are not configured in environment variables.');
     }
+}
+
+function normalizeCouponCode(code) {
+    return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
 }
 
 async function incrementMetrics(delta) {
@@ -788,16 +793,20 @@ async function getAdminBillingSummary() {
     const walletRollup = await getWalletRollup();
     const paymentRollup = await getPaymentsRollup();
     const ledgerRollup = await getLedgerRollup();
+    const couponRollup = await getCouponRollup();
     const grossRevenueFromLedger = sumRevenueForCapturedPayments(paymentRollup.amountByPaymentId, ledgerRollup.capturedPaymentIds);
-    const updatedAt = maxIsoDate(walletRollup.updatedAt, paymentRollup.updatedAt, ledgerRollup.updatedAt) || nowIso();
+    const updatedAt = maxIsoDate(walletRollup.updatedAt, paymentRollup.updatedAt, ledgerRollup.updatedAt, couponRollup.updatedAt) || nowIso();
 
     return {
         usersWithWallets: walletRollup.usersWithWallets,
         totalOutstandingCredits: walletRollup.totalOutstandingCredits,
         // Ledger entries are source-of-truth for granted/reversed credits.
         creditsSold: ledgerRollup.creditsSold,
+        creditsRedeemed: ledgerRollup.creditsRedeemed,
         creditsConsumed: ledgerRollup.creditsConsumed,
         creditsReversed: ledgerRollup.creditsReversed,
+        couponCodesCreated: couponRollup.couponCodesCreated,
+        couponClaims: couponRollup.couponClaims,
         grossRevenueInr: grossRevenueFromLedger,
         paymentsCaptured: ledgerRollup.paymentsCaptured,
         paymentsRefunded: ledgerRollup.paymentsRefunded,
@@ -871,6 +880,7 @@ async function getLedgerRollup() {
     const reversedByPayment = new Map();
     let usageDebit = 0;
     let usageCredit = 0;
+    let creditsRedeemed = 0;
     let updatedAt = null;
 
     do {
@@ -898,6 +908,8 @@ async function getLedgerRollup() {
                 if (pid) {
                     reversedByPayment.set(pid, (reversedByPayment.get(pid) || 0) + credits);
                 }
+            } else if (source === 'coupon_redeem') {
+                creditsRedeemed += credits;
             } else if (source.startsWith('ai_usage_')) {
                 if (entry.type === 'debit') usageDebit += credits;
                 else if (entry.type === 'credit') usageCredit += credits;
@@ -926,12 +938,192 @@ async function getLedgerRollup() {
 
     return {
         creditsSold,
+        creditsRedeemed,
         creditsConsumed: Math.max(0, usageDebit - usageCredit),
         creditsReversed,
         paymentsCaptured: capturedPaymentIds.size,
         paymentsRefunded: refundedPaymentIds.size,
         capturedPaymentIds,
         updatedAt,
+    };
+}
+
+async function getCouponRollup() {
+    let lastEvaluatedKey;
+    let couponCodesCreated = 0;
+    let couponClaims = 0;
+    let updatedAt = null;
+
+    do {
+        const page = await ddb.send(new ScanCommand({
+            TableName: COUPONS_TABLE,
+            ProjectionExpression: 'couponCode, claimedCount, updatedAt, createdAt',
+            ExclusiveStartKey: lastEvaluatedKey,
+        }));
+        for (const coupon of page.Items || []) {
+            couponCodesCreated += 1;
+            couponClaims += Number(coupon.claimedCount || 0);
+            const ts = coupon.updatedAt || coupon.createdAt || null;
+            if (ts && (!updatedAt || ts > updatedAt)) updatedAt = ts;
+        }
+        lastEvaluatedKey = page.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    return { couponCodesCreated, couponClaims, updatedAt };
+}
+
+async function createCoupon({
+    code,
+    credits,
+    createdBy,
+    maxClaims = 1000000,
+    expiresAt = null,
+    description = '',
+}) {
+    validateTables();
+    const couponCode = normalizeCouponCode(code);
+    const creditAmount = Number(credits || 0);
+    const claimsLimit = Math.max(1, Number(maxClaims || 1));
+    if (!couponCode || !/^[A-Z0-9_-]{4,32}$/.test(couponCode)) {
+        throw new Error('Coupon code must be 4-32 chars and contain only A-Z, 0-9, - or _.');
+    }
+    if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
+        throw new Error('Coupon credits must be a positive number.');
+    }
+
+    const now = nowIso();
+    const item = {
+        couponCode,
+        credits: Math.floor(creditAmount),
+        active: true,
+        maxClaims: claimsLimit,
+        claimedCount: 0,
+        createdBy: String(createdBy || 'admin'),
+        description: String(description || ''),
+        createdAt: now,
+        updatedAt: now,
+    };
+    if (expiresAt) item.expiresAt = new Date(expiresAt).toISOString();
+
+    await ddb.send(new PutCommand({
+        TableName: COUPONS_TABLE,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(couponCode)',
+    }));
+
+    return item;
+}
+
+async function redeemCoupon({ userId, code }) {
+    validateTables();
+    await ensureUserWallet(userId);
+    const couponCode = normalizeCouponCode(code);
+    if (!couponCode) {
+        throw new Error('Coupon code is required.');
+    }
+
+    const couponRes = await ddb.send(new GetCommand({
+        TableName: COUPONS_TABLE,
+        Key: { couponCode },
+    }));
+    const coupon = couponRes.Item;
+    if (!coupon || coupon.active === false) {
+        return { redeemed: false, reason: 'invalid_coupon' };
+    }
+    if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) {
+        return { redeemed: false, reason: 'coupon_expired' };
+    }
+
+    const sourceId = `coupon:${couponCode}:${userId}`;
+    const entryId = createDeterministicLedgerEntryId(sourceId);
+    const now = nowIso();
+    const credits = Number(coupon.credits || 0);
+    if (!Number.isFinite(credits) || credits <= 0) {
+        return { redeemed: false, reason: 'invalid_coupon' };
+    }
+
+    try {
+        await ddb.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: WALLET_TABLE,
+                        Key: { userId },
+                        UpdateExpression: 'SET balanceCredits = if_not_exists(balanceCredits, :zero) + :credits, updatedAt = :now',
+                        ExpressionAttributeValues: {
+                            ':zero': 0,
+                            ':credits': credits,
+                            ':now': now,
+                        },
+                    },
+                },
+                {
+                    Put: {
+                        TableName: LEDGER_TABLE,
+                        Item: {
+                            userId,
+                            entryId,
+                            type: 'credit',
+                            credits,
+                            source: 'coupon_redeem',
+                            sourceId,
+                            metadata: {
+                                couponCode,
+                            },
+                            createdAt: now,
+                        },
+                        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(entryId)',
+                    },
+                },
+                {
+                    Update: {
+                        TableName: COUPONS_TABLE,
+                        Key: { couponCode },
+                        UpdateExpression: 'SET claimedCount = if_not_exists(claimedCount, :zero) + :one, updatedAt = :now',
+                        ConditionExpression: 'active = :true AND (attribute_not_exists(maxClaims) OR claimedCount < maxClaims)',
+                        ExpressionAttributeValues: {
+                            ':zero': 0,
+                            ':one': 1,
+                            ':true': true,
+                            ':now': now,
+                        },
+                    },
+                },
+            ],
+        }));
+    } catch (err) {
+        if (err.name === 'TransactionCanceledException' || err.name === 'ConditionalCheckFailedException') {
+            const existing = await ddb.send(new GetCommand({
+                TableName: LEDGER_TABLE,
+                Key: { userId, entryId },
+            }));
+            if (existing.Item) return { redeemed: false, reason: 'already_claimed' };
+
+            const refreshed = await ddb.send(new GetCommand({
+                TableName: COUPONS_TABLE,
+                Key: { couponCode },
+            }));
+            const freshCoupon = refreshed.Item;
+            if (!freshCoupon || freshCoupon.active === false) return { redeemed: false, reason: 'invalid_coupon' };
+            if (freshCoupon.expiresAt && new Date(freshCoupon.expiresAt).getTime() < Date.now()) {
+                return { redeemed: false, reason: 'coupon_expired' };
+            }
+            if (Number(freshCoupon.claimedCount || 0) >= Number(freshCoupon.maxClaims || 0)) {
+                return { redeemed: false, reason: 'coupon_exhausted' };
+            }
+            return { redeemed: false, reason: 'already_claimed' };
+        }
+        throw err;
+    }
+
+    await incrementMetrics({
+        totalOutstandingCredits: credits,
+    });
+
+    return {
+        redeemed: true,
+        couponCode,
+        credits,
     };
 }
 
@@ -965,4 +1157,6 @@ module.exports = {
     grantCreditsForSuccessfulPayment,
     reverseCreditsForRefund,
     getAdminBillingSummary,
+    createCoupon,
+    redeemCoupon,
 };

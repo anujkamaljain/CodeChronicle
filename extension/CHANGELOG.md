@@ -2,6 +2,15 @@
 
 All notable changes to the "CodeChronicle" extension will be documented in this file.
 
+## [0.1.8] - 2026-04-07
+
+### Changed
+
+- Billing ecosystem update:
+  - Website billing now supports coupon redemption from user dashboard.
+  - Admin billing supports coupon code creation and redeemed-credit monitoring.
+  - Admin summary now includes total `Credits Redeemed` alongside sold/consumed/reversed metrics.
+
 ## [0.1.7] - 2026-04-07
 
 ### Added

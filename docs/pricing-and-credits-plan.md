@@ -289,6 +289,19 @@ Current safeguards implemented:
 
 ---
 
+## 12.1) Coupon Credits Flow
+
+1. Admin creates a coupon code with fixed credits and claim limit.
+2. User redeems coupon from billing dashboard.
+3. Backend atomically:
+   - credits wallet balance
+   - writes `coupon_redeem` ledger entry
+   - increments coupon claim count
+4. Duplicate claim by the same account for the same code is blocked.
+5. Redeemed credits become part of normal wallet balance and are consumed through standard AI usage debit flow.
+
+---
+
 ## 13) Monitoring and Budget Controls
 
 ### CloudWatch alarms
