@@ -1,7 +1,14 @@
 const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { randomUUID } = require('crypto');
 const { authenticateRequest } = require('./authz');
+const {
+    reserveCreditsForUsage,
+    creditAdjustment,
+    estimateMaxCreditsForRequest,
+    calculateCreditsToDebit,
+} = require('./creditService');
 
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -55,9 +62,57 @@ module.exports.explain = async (event) => {
 
         const maxTokens = detailed ? 4096 : 1024;
 
-        // Call Bedrock via Converse API
-        const aiResponse = await invokeModel(prompt, maxTokens);
-        const summary = aiResponse.trim();
+        const usageId = randomUUID();
+        const reservedCredits = estimateMaxCreditsForRequest(prompt.length, maxTokens);
+        try {
+            await reserveCreditsForUsage({
+                userId: auth.user.email,
+                credits: reservedCredits,
+                source: 'ai_usage_reserve',
+                sourceId: `reserve:${usageId}`,
+                metadata: { filePath, detailed: !!detailed, maxTokens },
+            });
+        } catch (billingErr) {
+            if (billingErr.name === 'ConditionalCheckFailedException') {
+                return response(402, { error: 'Insufficient credits. Please buy more credits to continue.' });
+            }
+            throw billingErr;
+        }
+
+        let aiResponse;
+        try {
+            // Call Bedrock via Converse API
+            aiResponse = await invokeModel(prompt, maxTokens);
+        } catch (invokeErr) {
+            await creditAdjustment({
+                userId: auth.user.email,
+                credits: reservedCredits,
+                source: 'ai_usage_reserve_release',
+                sourceId: `reserve_release:${usageId}`,
+                metadata: { reason: 'invoke_failed', message: invokeErr.message },
+            });
+            throw invokeErr;
+        }
+        const summary = aiResponse.text.trim();
+
+        const totalActual = calculateCreditsToDebit(aiResponse.usage.inputTokens, aiResponse.usage.outputTokens);
+        if (totalActual < reservedCredits) {
+            await creditAdjustment({
+                userId: auth.user.email,
+                credits: reservedCredits - totalActual,
+                source: 'ai_usage_reconciliation_credit',
+                sourceId: `reserve_reconcile:${usageId}`,
+                metadata: { reservedCredits, totalActual },
+            });
+        } else if (totalActual > reservedCredits) {
+            await reserveCreditsForUsage({
+                userId: auth.user.email,
+                credits: totalActual - reservedCredits,
+                source: 'ai_usage_reconciliation_debit',
+                sourceId: `reserve_reconcile_extra:${usageId}`,
+                metadata: { reservedCredits, totalActual },
+            });
+        }
 
         // Cache in DynamoDB
         await cacheSummary(cacheKey, filePath, summary);
@@ -104,19 +159,67 @@ module.exports.query = async (event) => {
         }
 
         const prompt = buildQueryPrompt({ query, graphContext, maxResults });
-        const aiResponse = await invokeModel(prompt, 2048);
+        const usageId = randomUUID();
+        const reservedCredits = estimateMaxCreditsForRequest(prompt.length, 2048);
+        try {
+            await reserveCreditsForUsage({
+                userId: auth.user.email,
+                credits: reservedCredits,
+                source: 'ai_usage_reserve',
+                sourceId: `reserve:${usageId}`,
+                metadata: { queryLength: query.length, maxTokens: 2048 },
+            });
+        } catch (billingErr) {
+            if (billingErr.name === 'ConditionalCheckFailedException') {
+                return response(402, { error: 'Insufficient credits. Please buy more credits to continue.' });
+            }
+            throw billingErr;
+        }
+
+        let aiResponse;
+        try {
+            aiResponse = await invokeModel(prompt, 2048);
+        } catch (invokeErr) {
+            await creditAdjustment({
+                userId: auth.user.email,
+                credits: reservedCredits,
+                source: 'ai_usage_reserve_release',
+                sourceId: `reserve_release:${usageId}`,
+                metadata: { reason: 'invoke_failed', message: invokeErr.message },
+            });
+            throw invokeErr;
+        }
 
         // Try to parse structured response
         let result;
         try {
-            result = JSON.parse(aiResponse);
+            result = JSON.parse(aiResponse.text);
         } catch {
             result = {
-                answer: aiResponse.trim(),
+                answer: aiResponse.text.trim(),
                 references: [],
                 suggestedQuestions: [],
                 confidence: 0.5,
             };
+        }
+
+        const totalActual = calculateCreditsToDebit(aiResponse.usage.inputTokens, aiResponse.usage.outputTokens);
+        if (totalActual < reservedCredits) {
+            await creditAdjustment({
+                userId: auth.user.email,
+                credits: reservedCredits - totalActual,
+                source: 'ai_usage_reconciliation_credit',
+                sourceId: `reserve_reconcile:${usageId}`,
+                metadata: { reservedCredits, totalActual },
+            });
+        } else if (totalActual > reservedCredits) {
+            await reserveCreditsForUsage({
+                userId: auth.user.email,
+                credits: totalActual - reservedCredits,
+                source: 'ai_usage_reconciliation_debit',
+                sourceId: `reserve_reconcile_extra:${usageId}`,
+                metadata: { reservedCredits, totalActual },
+            });
         }
 
         console.log(`Processed query: "${query.substring(0, 50)}..."`);
@@ -148,7 +251,13 @@ async function invokeModel(prompt, maxTokens = 1024) {
     });
 
     const result = await bedrockClient.send(command);
-    return result.output.message.content[0].text;
+    return {
+        text: result.output.message.content[0].text,
+        usage: {
+            inputTokens: result.usage?.inputTokens || 0,
+            outputTokens: result.usage?.outputTokens || 0,
+        },
+    };
 }
 
 // ========================================
@@ -231,7 +340,7 @@ async function handleRelationshipExplain(rel) {
 
     const prompt = buildRelationshipPrompt(rel);
     const aiResponse = await invokeModel(prompt, 2048);
-    const summary = aiResponse.trim();
+    const summary = aiResponse.text.trim();
 
     await cacheSummary(cacheKey, `${sourceFile.path}|${targetFile.path}`, summary);
 

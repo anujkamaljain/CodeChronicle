@@ -11,6 +11,7 @@ const {
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { grantFreeCreditsIfEligible, ensureUserWallet } = require('./creditService');
 
 // ─── Configuration ───────────────────────────────────────────────
 const USERS_TABLE = process.env.USERS_TABLE;
@@ -298,6 +299,8 @@ module.exports.register = async (event) => {
             })
         );
 
+        await ensureUserWallet(sanitizedEmail);
+
         // Send verification email (non-fatal — account is already persisted above)
         let emailSent = false;
         try {
@@ -375,6 +378,8 @@ module.exports.verifyEmail = async (event) => {
 
         // Issue JWT
         const token = signToken({ email: sanitizedEmail, name: user.name || null });
+
+        await grantFreeCreditsIfEligible(sanitizedEmail);
 
         return respond(200, {
             message: 'Email verified successfully.',

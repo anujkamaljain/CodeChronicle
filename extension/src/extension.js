@@ -24,6 +24,8 @@ let authService;
 /** @type {AuthWebviewProvider} */
 let authWebviewProvider;
 let authInitialised = false;
+const DEFAULT_WEBSITE_URL = 'https://codechronicle-seven.vercel.app';
+let walletSnapshot = null;
 
 // Shared state
 const state = {
@@ -97,7 +99,7 @@ function activate(context) {
 
     // ─── Auth Setup ──────────────────────────────────────
     const config = vscode.workspace.getConfiguration('codechronicle');
-    const apiEndpoint = config.get('awsApiEndpoint') || 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
+    const apiEndpoint = config.get('awsApiEndpoint') || 'https://usl085fgve.execute-api.us-east-1.amazonaws.com';
 
     authService = new AuthService(context, apiEndpoint);
     authWebviewProvider = new AuthWebviewProvider(context, authService);
@@ -151,6 +153,38 @@ function activate(context) {
                 vscode.window.showInformationMessage('CodeChronicle: Signed out successfully.');
             }
         }),
+        vscode.commands.registerCommand('codechronicle.buyCredits', async () => {
+            if (!requireAuth()) return;
+            const config = vscode.workspace.getConfiguration('codechronicle');
+            const websiteUrl = (config.get('websiteUrl') || DEFAULT_WEBSITE_URL).replace(/\/+$/, '');
+            const email = encodeURIComponent(authService?.user?.email || '');
+            const target = `${websiteUrl}/billing?emailHint=${email}&from=extension`;
+            await vscode.env.openExternal(vscode.Uri.parse(target));
+            vscode.window.showInformationMessage('CodeChronicle: Opened billing page in your browser.');
+        }),
+        vscode.commands.registerCommand('codechronicle.viewCredits', async () => {
+            if (!requireAuth()) return;
+            if (!state.apiClient) return;
+            try {
+                const wallet = await state.apiClient.getWallet();
+                walletSnapshot = wallet;
+                const items = (wallet.ledger || []).slice(0, 8).map((entry) => ({
+                    label: `${entry.type === 'debit' ? '-' : '+'}${entry.credits} credits`,
+                    description: entry.source,
+                    detail: new Date(entry.createdAt).toLocaleString(),
+                }));
+                if (!items.length) {
+                    items.push({ label: 'No credit activity yet', description: '', detail: '' });
+                }
+                await vscode.window.showQuickPick(items, {
+                    title: `CodeChronicle Credits: ${wallet.balanceCredits}`,
+                    placeHolder: 'Recent credit activity (from backend ledger)',
+                });
+                updateStatusBar('ready');
+            } catch (err) {
+                vscode.window.showErrorMessage(`CodeChronicle: Failed to load credits - ${err.message}`);
+            }
+        }),
     );
 
     // ─── Auth State Change Listener ──────────────────────
@@ -167,6 +201,7 @@ function activate(context) {
             }
             if (state.apiClient) {
                 state.apiClient.setAuthToken(authService?.token || null);
+                refreshWalletSnapshot().catch(() => {});
             }
             vscode.window.showInformationMessage(
                 `CodeChronicle: Welcome${event.user?.name ? ', ' + event.user.name : ''}!`
@@ -184,6 +219,7 @@ function activate(context) {
             if (state.apiClient) {
                 state.apiClient.setAuthToken(null);
             }
+            walletSnapshot = null;
         }
     });
 
@@ -1099,8 +1135,9 @@ function updateStatusBar(status) {
         case 'ready': {
             const nodeCount = state.graph ? Object.keys(state.graph.nodes).length : 0;
             const userName = authService?.user?.name || authService?.user?.email || '';
-            statusBarItem.text = `$(type-hierarchy) CodeChronicle${nodeCount > 0 ? `: ${nodeCount} files` : ''}`;
-            statusBarItem.tooltip = `Click to open CodeChronicle graph${userName ? '\nSigned in as ' + userName : ''}`;
+            const credits = walletSnapshot?.balanceCredits;
+            statusBarItem.text = `$(type-hierarchy) CodeChronicle${nodeCount > 0 ? `: ${nodeCount} files` : ''}${Number.isFinite(credits) ? ` | ${credits} cr` : ''}`;
+            statusBarItem.tooltip = `Click to open CodeChronicle graph${userName ? '\nSigned in as ' + userName : ''}${Number.isFinite(credits) ? `\nCredits: ${credits}` : '\nCredits: loading...'}`;
             statusBarItem.command = 'codechronicle.showGraph';
             statusBarItem.backgroundColor = undefined;
             break;
@@ -1187,6 +1224,7 @@ class SidebarViewProvider {
 
         const isAuth = this._authService?.isAuthenticated;
         const userName = this._authService?.user?.name || this._authService?.user?.email || '';
+        const userEmail = this._authService?.user?.email || '';
 
         const nonce = getNonce();
 
@@ -1294,6 +1332,7 @@ class SidebarViewProvider {
     background: none; border: none; color: var(--vscode-foreground);
   }
   .logout-link:hover { opacity: 0.85; text-decoration: underline; }
+  .meta { font-size: 11px; opacity: 0.6; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -1304,6 +1343,9 @@ class SidebarViewProvider {
 
   <button class="btn" id="scan-btn" type="button">Scan Workspace</button>
   <button class="btn btn-secondary" id="graph-btn" type="button">Open Graph View</button>
+  <button class="btn btn-secondary" id="buy-credits-btn" type="button">Buy Credits</button>
+  <button class="btn btn-secondary" id="view-credits-btn" type="button">View Credits</button>
+  <p class="meta">Use the same account (${userEmail}) on the website.</p>
 
   <div class="divider"></div>
 
@@ -1330,6 +1372,8 @@ class SidebarViewProvider {
     document.getElementById('ask-ai-btn').addEventListener('click', () => run('codechronicle.askAI'));
     document.getElementById('blast-btn').addEventListener('click', () => run('codechronicle.predictBlastRadius'));
     document.getElementById('refresh-btn').addEventListener('click', () => run('codechronicle.refreshAnalysis'));
+    document.getElementById('buy-credits-btn').addEventListener('click', () => run('codechronicle.buyCredits'));
+    document.getElementById('view-credits-btn').addEventListener('click', () => run('codechronicle.viewCredits'));
     document.getElementById('logout-btn').addEventListener('click', () => run('codechronicle.logout'));
   </script>
 </body>
@@ -1339,6 +1383,16 @@ class SidebarViewProvider {
 
 function deactivate() {
     if (fileWatcher) fileWatcher.stop();
+}
+
+async function refreshWalletSnapshot() {
+    if (!state.apiClient || !authService?.isAuthenticated) return;
+    try {
+        walletSnapshot = await state.apiClient.getWallet();
+        updateStatusBar('ready');
+    } catch (err) {
+        console.warn('CodeChronicle: wallet refresh failed:', err.message);
+    }
 }
 
 module.exports = { activate, deactivate };

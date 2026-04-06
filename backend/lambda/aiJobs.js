@@ -4,6 +4,12 @@ const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedro
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { authenticateRequest } = require('./authz');
+const {
+    reserveCreditsForUsage,
+    creditAdjustment,
+    estimateMaxCreditsForRequest,
+    calculateCreditsToDebit,
+} = require('./creditService');
 
 const sqsClient = new SQSClient({});
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -176,18 +182,65 @@ module.exports.processQueryJob = async (event) => {
             }));
 
             const prompt = buildQueryPrompt({ query, graphContext, maxResults });
-            const aiResponse = await invokeModel(prompt, AI_QUERY_MAX_TOKENS);
+            const reservedCredits = estimateMaxCreditsForRequest(prompt.length, AI_QUERY_MAX_TOKENS);
+            try {
+                await reserveCreditsForUsage({
+                    userId: parsed.ownerId,
+                    credits: reservedCredits,
+                    source: 'ai_usage_reserve',
+                    sourceId: `reserve:async:${jobId}`,
+                    metadata: { queryLength: query.length, maxTokens: AI_QUERY_MAX_TOKENS },
+                });
+            } catch (billingErr) {
+                if (billingErr.name === 'ConditionalCheckFailedException') {
+                    throw new Error('Insufficient credits. Please buy more credits to continue.');
+                }
+                throw billingErr;
+            }
+
+            let aiResponse;
+            try {
+                aiResponse = await invokeModel(prompt, AI_QUERY_MAX_TOKENS);
+            } catch (invokeErr) {
+                await creditAdjustment({
+                    userId: parsed.ownerId,
+                    credits: reservedCredits,
+                    source: 'ai_usage_reserve_release',
+                    sourceId: `reserve_release:async:${jobId}`,
+                    metadata: { reason: 'invoke_failed', message: invokeErr.message },
+                });
+                throw invokeErr;
+            }
 
             let result;
             try {
-                result = JSON.parse(aiResponse);
+                result = JSON.parse(aiResponse.text);
             } catch {
                 result = {
-                    answer: aiResponse.trim(),
+                    answer: aiResponse.text.trim(),
                     references: [],
                     suggestedQuestions: [],
                     confidence: 0.5,
                 };
+            }
+
+            const totalActual = calculateCreditsToDebit(aiResponse.usage.inputTokens, aiResponse.usage.outputTokens);
+            if (totalActual < reservedCredits) {
+                await creditAdjustment({
+                    userId: parsed.ownerId,
+                    credits: reservedCredits - totalActual,
+                    source: 'ai_usage_reconciliation_credit',
+                    sourceId: `reserve_reconcile:async:${jobId}`,
+                    metadata: { reservedCredits, totalActual },
+                });
+            } else if (totalActual > reservedCredits) {
+                await reserveCreditsForUsage({
+                    userId: parsed.ownerId,
+                    credits: totalActual - reservedCredits,
+                    source: 'ai_usage_reconciliation_debit',
+                    sourceId: `reserve_reconcile_extra:async:${jobId}`,
+                    metadata: { reservedCredits, totalActual },
+                });
             }
 
             await dynamoClient.send(new UpdateCommand({
@@ -236,7 +289,13 @@ async function invokeModel(prompt, maxTokens = 2048) {
     });
 
     const result = await bedrockClient.send(command);
-    return result.output.message.content[0].text;
+    return {
+        text: result.output.message.content[0].text,
+        usage: {
+            inputTokens: result.usage?.inputTokens || 0,
+            outputTokens: result.usage?.outputTokens || 0,
+        },
+    };
 }
 
 function buildQueryPrompt({ query, graphContext, maxResults }) {

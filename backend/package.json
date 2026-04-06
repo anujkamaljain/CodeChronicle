@@ -16,7 +16,8 @@
         "@aws-sdk/client-sqs": "^3.1024.0",
         "@aws-sdk/lib-dynamodb": "^3.515.0",
         "bcryptjs": "^3.0.3",
-        "jsonwebtoken": "^9.0.3"
+        "jsonwebtoken": "^9.0.3",
+        "razorpay": "^2.9.6"
     },
     "devDependencies": {
         "serverless": "^3.38.0"

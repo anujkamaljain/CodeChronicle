@@ -3,7 +3,7 @@ const vscode = require('vscode');
 // IMPORTANT: Replace this URL after running `npx serverless deploy`
 // in the backend/ folder. The deploy output will give you the URL.
 // ============================================================
-const DEFAULT_API_ENDPOINT = 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
+const DEFAULT_API_ENDPOINT = 'https://usl085fgve.execute-api.us-east-1.amazonaws.com';
 // 'https://bcwwweix5i.execute-api.us-east-1.amazonaws.com';
 // 'https://usl085fgve.execute-api.us-east-1.amazonaws.com';
 
@@ -276,6 +276,17 @@ class APIClient {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Fetch current authenticated wallet balance and ledger.
+     * @returns {Promise<{balanceCredits:number,ledger:Array}>}
+     */
+    async getWallet() {
+        if (!this.isAvailable()) {
+            throw new Error('Cloud API is currently unavailable.');
+        }
+        return this.makeRequest('/billing/wallet', { method: 'GET' });
     }
 
     /**

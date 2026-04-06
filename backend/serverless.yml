@@ -32,9 +32,26 @@ provider:
     STAGE: ${self:provider.stage}
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-production-use-ssm'}
     JWT_EXPIRY: '7d'
+    WEBSITE_URL: ${env:WEBSITE_URL, ''}
     BREVO_API_KEY: ${env:BREVO_API_KEY, ''}
     BREVO_SENDER_EMAIL: ${env:BREVO_SENDER_EMAIL, 'noreply@codechronicle.dev'}
     BREVO_SENDER_NAME: 'CodeChronicle'
+    CREDITS_WALLET_TABLE: ${self:service}-credits-wallet-${self:provider.stage}
+    CREDITS_LEDGER_TABLE: ${self:service}-credits-ledger-${self:provider.stage}
+    CREDITS_PAYMENTS_TABLE: ${self:service}-credits-payments-${self:provider.stage}
+    CREDITS_METRICS_TABLE: ${self:service}-credits-metrics-${self:provider.stage}
+    FREE_TRIAL_CREDITS: ${env:FREE_TRIAL_CREDITS, '25'}
+    CREDIT_PRICE_INR: ${env:CREDIT_PRICE_INR, '1'}
+    CREDIT_COST_SAFETY_MULTIPLIER: ${env:CREDIT_COST_SAFETY_MULTIPLIER, '1.2'}
+    INR_PER_USD: ${env:INR_PER_USD, '93'}
+    INPUT_TOKEN_USD_PER_1M: ${env:INPUT_TOKEN_USD_PER_1M, '2.5'}
+    OUTPUT_TOKEN_USD_PER_1M: ${env:OUTPUT_TOKEN_USD_PER_1M, '12.5'}
+    RAZORPAY_NET_FACTOR: ${env:RAZORPAY_NET_FACTOR, '0.9764'}
+    RAZORPAY_KEY_ID: ${env:RAZORPAY_KEY_ID, ''}
+    RAZORPAY_KEY_SECRET: ${env:RAZORPAY_KEY_SECRET, ''}
+    RAZORPAY_WEBHOOK_SECRET: ${env:RAZORPAY_WEBHOOK_SECRET, ''}
+    ADMIN_API_KEY: ${env:ADMIN_API_KEY, ''}
+    ADMIN_EMAILS: ${env:ADMIN_EMAILS, ''}
   iam:
     role:
       statements:
@@ -62,6 +79,12 @@ provider:
             - !GetAtt UsersTable.Arn
             - !GetAtt AIJobsTable.Arn
             - !GetAtt AIUsageTable.Arn
+            - !GetAtt CreditsWalletTable.Arn
+            - !GetAtt CreditsLedgerTable.Arn
+            - !GetAtt CreditsPaymentsTable.Arn
+            - !GetAtt CreditsMetricsTable.Arn
+            - !Sub '${CreditsLedgerTable.Arn}/index/*'
+            - !Sub '${CreditsPaymentsTable.Arn}/index/*'
         - Effect: Allow
           Action:
             - sqs:SendMessage
@@ -189,6 +212,46 @@ functions:
           method: POST
     timeout: 29
 
+  billingGetPlans:
+    handler: lambda/billingHandler.getPlans
+    events:
+      - httpApi:
+          path: /billing/plans
+          method: GET
+    timeout: 29
+
+  billingGetWallet:
+    handler: lambda/billingHandler.getWallet
+    events:
+      - httpApi:
+          path: /billing/wallet
+          method: GET
+    timeout: 29
+
+  billingCreateOrder:
+    handler: lambda/billingHandler.createOrder
+    events:
+      - httpApi:
+          path: /billing/create-order
+          method: POST
+    timeout: 29
+
+  billingRazorpayWebhook:
+    handler: lambda/billingHandler.razorpayWebhook
+    events:
+      - httpApi:
+          path: /billing/razorpay/webhook
+          method: POST
+    timeout: 29
+
+  billingAdminSummary:
+    handler: lambda/billingHandler.adminBillingSummary
+    events:
+      - httpApi:
+          path: /billing/admin/summary
+          method: GET
+    timeout: 29
+
 resources:
   Resources:
     UsersTable:
@@ -273,6 +336,80 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
+
+    CreditsWalletTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CREDITS_WALLET_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+
+    CreditsLedgerTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CREDITS_LEDGER_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: entryId
+            AttributeType: S
+          - AttributeName: sourceId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: entryId
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: SourceIdIndex
+            KeySchema:
+              - AttributeName: sourceId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    CreditsPaymentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CREDITS_PAYMENTS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: paymentId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: paymentId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserPaymentsIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    CreditsMetricsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CREDITS_METRICS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: metricKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: metricKey
+            KeyType: HASH
 
     AIQueryDLQ:
       Type: AWS::SQS::Queue
