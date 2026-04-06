@@ -279,6 +279,22 @@ functions:
           method: POST
     timeout: 29
 
+  billingAdminListCoupons:
+    handler: lambda/billingHandler.adminListCoupons
+    events:
+      - httpApi:
+          path: /billing/admin/coupons
+          method: GET
+    timeout: 29
+
+  billingAdminUpdateCoupon:
+    handler: lambda/billingHandler.adminUpdateCoupon
+    events:
+      - httpApi:
+          path: /billing/admin/coupons/update
+          method: POST
+    timeout: 29
+
 resources:
   Resources:
     UsersTable:

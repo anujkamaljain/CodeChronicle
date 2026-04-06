@@ -14,6 +14,8 @@ const {
     reverseCreditsForRefund,
     getAdminBillingSummary,
     createCoupon,
+    listCoupons,
+    updateCoupon,
     redeemCoupon,
 } = require('./creditService');
 
@@ -329,5 +331,47 @@ module.exports.adminCreateCoupon = async (event) => {
             return response(400, { error: err.message });
         }
         return response(500, { error: 'Failed to create coupon. Please try again later.' });
+    }
+};
+
+module.exports.adminListCoupons = async (event) => {
+    try {
+        const auth = await authorizeAdmin(event);
+        if (!auth.ok) return response(auth.statusCode, auth.body);
+
+        const limit = Number(event?.queryStringParameters?.limit || 200);
+        const coupons = await listCoupons(limit);
+        return response(200, coupons);
+    } catch (err) {
+        console.error('adminListCoupons error:', err);
+        return response(500, { error: 'Failed to fetch coupons. Please try again later.' });
+    }
+};
+
+module.exports.adminUpdateCoupon = async (event) => {
+    try {
+        const auth = await authorizeAdmin(event);
+        if (!auth.ok) return response(auth.statusCode, auth.body);
+
+        const { body } = parseJsonBody(event);
+        const coupon = await updateCoupon({
+            code: body?.code,
+            active: body?.active,
+            expiresAt: body?.expiresAt,
+        });
+        return response(200, { coupon });
+    } catch (err) {
+        console.error('adminUpdateCoupon error:', err);
+        if (err.name === 'ConditionalCheckFailedException') {
+            return response(404, { error: 'Coupon not found.' });
+        }
+        if (
+            String(err.message || '').toLowerCase().includes('coupon')
+            || err.name === 'RangeError'
+            || String(err.message || '').toLowerCase().includes('invalid time value')
+        ) {
+            return response(400, { error: 'Invalid coupon update payload.' });
+        }
+        return response(500, { error: 'Failed to update coupon. Please try again later.' });
     }
 };

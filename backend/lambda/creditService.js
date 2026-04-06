@@ -1014,6 +1014,72 @@ async function createCoupon({
     return item;
 }
 
+async function listCoupons(limit = 200) {
+    validateTables();
+    const cappedLimit = Math.max(1, Math.min(500, Number(limit || 200)));
+    const page = await ddb.send(new ScanCommand({
+        TableName: COUPONS_TABLE,
+        Limit: cappedLimit,
+    }));
+    const items = (page.Items || []).sort((a, b) => {
+        const aTs = String(a.createdAt || '');
+        const bTs = String(b.createdAt || '');
+        return bTs.localeCompare(aTs);
+    });
+    return { items };
+}
+
+async function updateCoupon({
+    code,
+    active,
+    expiresAt,
+}) {
+    validateTables();
+    const couponCode = normalizeCouponCode(code);
+    if (!couponCode) throw new Error('Coupon code is required.');
+
+    const updates = [];
+    const names = {};
+    const values = { ':now': nowIso() };
+
+    if (typeof active === 'boolean') {
+        names['#active'] = 'active';
+        values[':active'] = active;
+        updates.push('#active = :active');
+    }
+
+    if (expiresAt !== undefined) {
+        names['#expiresAt'] = 'expiresAt';
+        if (expiresAt === null || String(expiresAt).trim() === '') {
+            updates.push('#expiresAt = :expiresAtNull');
+            values[':expiresAtNull'] = null;
+        } else {
+            const iso = new Date(expiresAt).toISOString();
+            updates.push('#expiresAt = :expiresAt');
+            values[':expiresAt'] = iso;
+        }
+    }
+
+    if (!updates.length) {
+        throw new Error('No valid coupon updates provided.');
+    }
+
+    names['#updatedAt'] = 'updatedAt';
+    updates.push('#updatedAt = :now');
+
+    const result = await ddb.send(new UpdateCommand({
+        TableName: COUPONS_TABLE,
+        Key: { couponCode },
+        UpdateExpression: `SET ${updates.join(', ')}`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+        ConditionExpression: 'attribute_exists(couponCode)',
+        ReturnValues: 'ALL_NEW',
+    }));
+
+    return result.Attributes;
+}
+
 async function redeemCoupon({ userId, code }) {
     validateTables();
     await ensureUserWallet(userId);
@@ -1158,5 +1224,7 @@ module.exports = {
     reverseCreditsForRefund,
     getAdminBillingSummary,
     createCoupon,
+    listCoupons,
+    updateCoupon,
     redeemCoupon,
 };
