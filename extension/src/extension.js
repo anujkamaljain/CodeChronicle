@@ -23,6 +23,7 @@ let fileWatcher;
 let authService;
 /** @type {AuthWebviewProvider} */
 let authWebviewProvider;
+let authInitialised = false;
 
 // Shared state
 const state = {
@@ -43,6 +44,10 @@ const state = {
  * @returns {boolean} true if authenticated
  */
 function requireAuth() {
+    // Avoid false "please sign in" prompts while startup session restore is running.
+    if (!authInitialised) {
+        return false;
+    }
     if (authService && authService.isAuthenticated) {
         return true;
     }
@@ -151,6 +156,9 @@ function activate(context) {
     authService.onAuthStateChanged((event) => {
         if (event.authenticated) {
             console.log('CodeChronicle: User authenticated —', event.user?.email);
+            if (authWebviewProvider) {
+                authWebviewProvider.dispose();
+            }
             updateStatusBar('ready');
             // Initialise core components now that user is authenticated
             if (!state.scanner) {
@@ -174,6 +182,7 @@ function activate(context) {
 
     // ─── Check existing auth on startup ──────────────────
     authService.initialise().then((isAuthenticated) => {
+        authInitialised = true;
         if (isAuthenticated) {
             console.log('CodeChronicle: Restored session for', authService.user?.email);
             if (!state.scanner) {
@@ -186,6 +195,11 @@ function activate(context) {
             // Auto-show auth panel on first startup if not authenticated
             authWebviewProvider.show();
         }
+    }).catch((err) => {
+        authInitialised = true;
+        console.error('CodeChronicle: Auth initialisation failed:', err);
+        updateStatusBar('locked');
+        authWebviewProvider.show();
     });
 
     context.subscriptions.push({ dispose: () => {

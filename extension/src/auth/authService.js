@@ -49,15 +49,15 @@ class AuthService {
      * @returns {Promise<boolean>} true if user is authenticated
      */
     async initialise() {
+        const storedToken = await this._secrets.get(AuthService.TOKEN_KEY);
+        const storedUser = this._context.globalState.get(AuthService.USER_KEY);
+
+        if (!storedToken) {
+            this._setUnauthenticated();
+            return false;
+        }
+
         try {
-            const storedToken = await this._secrets.get(AuthService.TOKEN_KEY);
-            const storedUser = this._context.globalState.get(AuthService.USER_KEY);
-
-            if (!storedToken) {
-                this._setUnauthenticated();
-                return false;
-            }
-
             // Validate the token against the backend
             const result = await this._apiRequest('/auth/verify-token', { token: storedToken });
 
@@ -76,18 +76,16 @@ class AuthService {
             return false;
         } catch (err) {
             console.warn('AuthService: initialise failed:', err.message);
-            // If network is down but we have a stored token, allow offline mode
-            const storedToken = await this._secrets.get(AuthService.TOKEN_KEY);
-            const storedUser = this._context.globalState.get(AuthService.USER_KEY);
-            if (storedToken && storedUser) {
-                this._token = storedToken;
-                this._user = storedUser;
-                this._isAuthenticated = true;
-                this._onAuthStateChanged.fire({ authenticated: true, user: this._user, offline: true });
-                return true;
+
+            // Only force logout when backend explicitly says token is invalid/expired.
+            // For transient backend/network errors, restore local session to avoid
+            // blocking the user with a login prompt on every IDE restart.
+            if (err.statusCode === 400 || err.statusCode === 401) {
+                await this.logout();
+                return false;
             }
-            this._setUnauthenticated();
-            return false;
+
+            return this._restoreLocalSession(storedToken, storedUser);
         }
     }
 
@@ -185,6 +183,45 @@ class AuthService {
         this._onAuthStateChanged.fire({ authenticated: true, user });
     }
 
+    /**
+     * Restore a local session when backend verification is unavailable.
+     * @param {string} token
+     * @param {{ email?: string, name?: string | null } | null | undefined} storedUser
+     * @returns {boolean}
+     */
+    _restoreLocalSession(token, storedUser) {
+        const tokenUser = this._decodeTokenPayload(token);
+        const user = storedUser || tokenUser || null;
+
+        if (!user || !user.email) {
+            this._setUnauthenticated();
+            return false;
+        }
+
+        this._token = token;
+        this._user = { email: user.email, name: user.name || null };
+        this._isAuthenticated = true;
+        this._onAuthStateChanged.fire({ authenticated: true, user: this._user, offline: true });
+        return true;
+    }
+
+    /**
+     * Decode JWT payload without signature verification (local fallback only).
+     * @param {string} token
+     * @returns {{ email?: string, name?: string | null } | null}
+     */
+    _decodeTokenPayload(token) {
+        try {
+            const parts = token.split('.');
+            if (parts.length !== 3) return null;
+            const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const json = Buffer.from(payload, 'base64').toString('utf8');
+            return JSON.parse(json);
+        } catch {
+            return null;
+        }
+    }
+
     _setUnauthenticated() {
         this._token = null;
         this._user = null;
@@ -212,10 +249,16 @@ class AuthService {
             });
             clearTimeout(timeout);
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                data = {};
+            }
 
             if (!response.ok) {
-                const err = new Error(data.error || `Request failed (${response.status})`);
+                const err = new Error(data.error || data.message || `Request failed (${response.status})`);
+                err.statusCode = response.status;
                 if (data.needsVerification) err.needsVerification = true;
                 throw err;
             }

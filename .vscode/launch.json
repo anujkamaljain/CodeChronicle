@@ -6,7 +6,9 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/extension",
+                "--user-data-dir=${workspaceFolder}/.vscode/.cc-dev-user-data",
+                "--extensions-dir=${workspaceFolder}/.vscode/.cc-dev-extensions"
             ],
             "outFiles": [
                 "${workspaceFolder}/extension/dist/**/*.js"
@@ -18,7 +20,9 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/extension",
+                "--user-data-dir=${workspaceFolder}/.vscode/.cc-dev-user-data",
+                "--extensions-dir=${workspaceFolder}/.vscode/.cc-dev-extensions"
             ],
             "outFiles": [
                 "${workspaceFolder}/extension/dist/**/*.js"

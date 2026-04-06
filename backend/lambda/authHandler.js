@@ -257,11 +257,17 @@ module.exports.register = async (event) => {
                     })
                 );
 
-                await sendVerificationEmail(sanitizedEmail, code, name);
+                let emailSent = false;
+                try {
+                    await sendVerificationEmail(sanitizedEmail, code, name);
+                    emailSent = true;
+                } catch (emailErr) {
+                    console.warn('Verification email failed (re-register):', emailErr.message);
+                }
 
                 return respond(200, {
                     message: 'Verification code resent. Please check your email.',
-                    emailSent: true,
+                    emailSent,
                 });
             }
 
@@ -292,12 +298,18 @@ module.exports.register = async (event) => {
             })
         );
 
-        // Send verification email
-        await sendVerificationEmail(sanitizedEmail, code, name);
+        // Send verification email (non-fatal — account is already persisted above)
+        let emailSent = false;
+        try {
+            await sendVerificationEmail(sanitizedEmail, code, name);
+            emailSent = true;
+        } catch (emailErr) {
+            console.warn('Verification email failed (register):', emailErr.message);
+        }
 
         return respond(201, {
             message: 'Account created. Please verify your email.',
-            emailSent: true,
+            emailSent,
         });
     } catch (err) {
         console.error('Register error:', err);
@@ -519,7 +531,11 @@ module.exports.resendCode = async (event) => {
             })
         );
 
-        await sendVerificationEmail(sanitizedEmail, code, user.name);
+        try {
+            await sendVerificationEmail(sanitizedEmail, code, user.name);
+        } catch (emailErr) {
+            console.warn('Verification email failed (resend):', emailErr.message);
+        }
 
         return respond(200, { message: 'If the account exists, a new code has been sent.' });
     } catch (err) {
