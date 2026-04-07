@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=AnujKamalJain.codechronicle"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visual-studio-code&style=for-the-badge" alt="VS Code Marketplace" /></a>
   <img src="https://img.shields.io/badge/version-0.1.6-blue?style=for-the-badge" alt="Version" />
-  <img src="https://img.shields.io/badge/500%2B%20users-Trusted-4ade80?style=for-the-badge" alt="500+ trusted users" />
+  <img src="https://img.shields.io/badge/500%2B%20users-Trusted-4ade80?style=for-the-badge" alt="800+ trusted users" />
   <img src="https://img.shields.io/badge/JavaScript-ES2023-F7DF1E?logo=javascript&style=for-the-badge" alt="JavaScript" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&style=for-the-badge" alt="React" />
   <img src="https://img.shields.io/badge/AWS-Bedrock%20|%20Lambda%20|%20DynamoDB-FF9900?logo=amazon-aws&style=for-the-badge" alt="AWS" />
@@ -66,7 +66,7 @@ You can grab CodeChronicle from the **VS Code Marketplace**, **Kiro**, **Antigra
 
 **Website:** [https://codechronicle-seven.vercel.app/](https://codechronicle-seven.vercel.app/)
 
-One more thing we're excited to share: the extension has crossed **500+ downloads** and is trusted by developers across all these platforms. Really appreciate everyone who's tried it so far.
+One more thing we're excited to share: the extension has crossed **800+ downloads** and is trusted by developers across all these platforms. Really appreciate everyone who's tried it so far.
 
 ---
 
