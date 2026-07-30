@@ -7,7 +7,7 @@ useDotenv: true
 provider:
   name: aws
   runtime: nodejs20.x
-  stage: ${opt:stage, 'dev'}
+  stage: ${opt:stage, 'prod'}
   region: ${opt:region, 'us-east-1'}
   memorySize: 512
   timeout: 30

@@ -191,18 +191,13 @@ module.exports.query = async (event) => {
             throw invokeErr;
         }
 
-        // Try to parse structured response
-        let result;
-        try {
-            result = JSON.parse(aiResponse.text);
-        } catch {
-            result = {
-                answer: aiResponse.text.trim(),
-                references: [],
-                suggestedQuestions: [],
-                confidence: 0.5,
-            };
-        }
+        // Try to parse structured response (handles markdown-fenced JSON from newer models)
+        const { normalizeQueryResult, filterReferencesToContext } = require('./parseModelJson');
+        const result = normalizeQueryResult(null, aiResponse.text);
+        result.references = filterReferencesToContext(
+            result.references,
+            graphContext?.relevantFiles
+        );
 
         const totalActual = calculateCreditsToDebit(aiResponse.usage.inputTokens, aiResponse.usage.outputTokens);
         if (totalActual < reservedCredits) {
@@ -468,6 +463,7 @@ RULES:
 4. Do NOT invent line numbers — they are unreliable. Reference by function/class name instead.
 5. Be concise but thorough. Prefer specificity over vagueness.
 6. For large codebases, focus on the most architecturally significant files.
+7. In "references", ONLY use exact path values from the Relevant Files list above. Never invent paths from other projects or memory.
 
 Format your response as JSON:
 {

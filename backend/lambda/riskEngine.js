@@ -45,19 +45,14 @@ module.exports.assessRisk = async (event) => {
         // Call Bedrock via Converse API
         const aiResponse = await invokeModel(prompt);
 
-        // Parse AI response
-        let riskFactor;
-        try {
-            riskFactor = JSON.parse(aiResponse);
-        } catch {
-            // Fallback if AI doesn't return proper JSON
-            riskFactor = {
-                level: 'medium',
-                score: 50,
-                explanation: aiResponse.trim().substring(0, 200),
-                factors: ['Unable to parse structured risk assessment'],
-            };
-        }
+        // Parse AI response (handles markdown-fenced JSON from newer models)
+        const { parseModelJson } = require('./parseModelJson');
+        let riskFactor = parseModelJson(aiResponse, {
+            level: 'medium',
+            score: 50,
+            explanation: String(aiResponse || '').trim().substring(0, 200),
+            factors: ['Unable to parse structured risk assessment'],
+        });
 
         // Validate and normalize
         riskFactor.score = Math.max(0, Math.min(100, Number(riskFactor.score) || 50));

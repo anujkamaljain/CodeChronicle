@@ -1109,19 +1109,22 @@ function resolveFilePath(targetPath, graph) {
  * @returns {Array} references with resolved paths
  */
 function resolveQueryReferences(references, graph) {
-    if (!graph || !graph.nodes) return references;
+    if (!Array.isArray(references) || references.length === 0) return [];
+    if (!graph || !graph.nodes) return [];
 
-    return references.map(ref => {
-        if (!ref.path) return { ...ref, unresolved: true };
+    // Keep only references that map to a real scanned file (drop hallucinations).
+    const resolvedRefs = [];
+    for (const ref of references) {
+        if (!ref?.path) continue;
 
         const resolved = resolveFilePath(ref.path, graph);
         if (resolved) {
-            return { ...ref, path: resolved };
+            resolvedRefs.push({ ...ref, path: resolved, unresolved: false });
         } else {
-            console.warn(`CodeChronicle: Could not resolve AI reference path: ${ref.path}`);
-            return { ...ref, unresolved: true };
+            console.warn(`CodeChronicle: Dropping unresolved AI reference path: ${ref.path}`);
         }
-    });
+    }
+    return resolvedRefs;
 }
 
 async function askAI() {
